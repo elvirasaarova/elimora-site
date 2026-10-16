@@ -1,0 +1,11 @@
+import {test} from 'node:test';import assert from 'node:assert/strict';import {recommend} from '../recommendation.mjs';
+const base={tasks:['maps'],sector:'beauty',yandex:'yes',count:'1-5',breadth:'one',needs:['core'],logo:'yes',photos:'many',info:'ready'};
+test('refusing Yandex payment always limits recommendation to basic',()=>assert.equal(recommend({...base,yandex:'no',count:'20+',breadth:'many',needs:['core','faq','links','process']}).key,'basic'));
+test('compact paid project recommends extended',()=>assert.equal(recommend(base).key,'extended'));
+test('large catalogue recommends max and flags overflow',()=>{let r=recommend({...base,count:'20+'});assert.equal(r.key,'max');assert.ok(r.warnings.some(x=>x.includes('20 позиций')))});
+test('missing logo/photos does not upsell',()=>{let r=recommend({...base,logo:'no',photos:'none',info:'no'});assert.equal(r.key,'extended');assert.equal(r.ready,false);assert.equal(r.warnings.length,3)});
+test('uncertain payment remains explicitly conditional',()=>{let r=recommend({...base,yandex:'unsure'});assert.equal(r.conditional,true);assert.match(r.reasons[0],/9 900/)});
+test('independent business lines justify max',()=>assert.equal(recommend({...base,breadth:'many'}).key,'max'));
+test('visual only is not assigned a maps package',()=>{let r=recommend({...base,tasks:['visual'],visual:'logo'});assert.equal(r.pkg,null);assert.equal(r.visualPrice,3500)});
+test('sector-specific advice and plan are useful without purchase',()=>{let r=recommend({...base,sector:'food'});assert.match(r.actions[0],/меню/);assert.equal(r.topics.length,6);assert.equal(r.photos.length,4)});
+test('combined project retains custom web calculation',()=>{let r=recommend({...base,tasks:['maps','web']});assert.equal(r.custom,true);assert.equal(r.pkg.price,15900)});
