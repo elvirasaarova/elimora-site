@@ -1,0 +1,3 @@
+User-agent: *
+Allow: /
+Sitemap: https://elvirasaarova.github.io/elimora-site/sitemap.xml
