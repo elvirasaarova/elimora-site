@@ -1,7 +1,7 @@
 const sectors={"food": "Кафе и рестораны", "beauty": "Красота и уход", "auto": "Автосервисы", "plants": "Цветы и растения", "building": "Строительство, недвижимость и ремонт", "education": "Детские центры и образование", "hotels": "Отели и базы отдыха", "retail": "Магазины и торговля", "business": "Услуги для бизнеса", "medical": "Медицина и стоматология"};
 const area=document.getElementById('project-list'),viewer=document.getElementById('art-viewer');let data=[],items=[],active=0,opener;
 fetch('projects.json?v=8').then(r=>{if(!r.ok)throw Error();return r.json()}).then(p=>{data=p;const key=new URLSearchParams(location.search).get('sector');if(sectors[key])select(key)}).catch(()=>{document.getElementById('gallery-heading').textContent='Не удалось загрузить галерею. Обновите страницу.'});
-const groups=[['stories','Истории'],['creative','Витрина / Креативы'],['logo','Логотип'],['posts','Публикации'],['qr','QR-коды']];
+const groups=[['stories','Истории'],['creative','Витрина / Креативы'],['posts','Публикации'],['qr','QR-коды']];
 function dragStrip(strip){
  let startX=0,startScroll=0,dragged=false,pressed=false;
  strip.addEventListener('pointerdown',e=>{if(e.pointerType!=='mouse'||e.button!==0||strip.scrollWidth<=strip.clientWidth)return;pressed=true;dragged=false;startX=e.clientX;startScroll=strip.scrollLeft});
@@ -19,7 +19,7 @@ function select(key){
  for(const p of ps){
   const article=document.createElement('article');article.className='project-series';
   const title=document.createElement('h3');title.textContent=p.title;article.append(title);
-  const visible=p.images.filter(file=>file.kind!=='stories').length+Math.min(4,p.images.filter(file=>file.kind==='stories').length);
+  const visible=p.images.filter(file=>file.kind!=='stories'&&file.kind!=='logo').length+Math.min(4,p.images.filter(file=>file.kind==='stories').length);
   const info=document.createElement('p');info.textContent=visible+' макетов в подборке'+(p.id==='tyres-sign'?' · Визуализация, не фотография установленной вывески':'');article.append(info);
   for(const [kind,label] of groups){
    const collection=p.images.filter(file=>file.kind===kind);

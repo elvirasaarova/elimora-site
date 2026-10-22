@@ -11,6 +11,7 @@
 .welcome-laptop a{display:block;cursor:zoom-in}
 .welcome-laptop img{width:100%;height:auto;max-height:none;object-fit:contain;filter:drop-shadow(0 24px 24px #32144525)}
 .welcome-page{width:29%;top:2%;right:0;transform:rotate(3deg)}
+@media(min-width:701px){.web-case-welcome .case-heading{text-align:right}.welcome-scene{justify-content:flex-end}.welcome-scene .welcome-laptop{margin-left:auto;transform:rotate(3deg)}.welcome-scene .welcome-page{left:0;right:auto;transform:rotate(-3deg)}.web-case-welcome .case-bottom{flex-direction:row-reverse}.web-case-welcome .case-bottom p{text-align:right}}
 .murom-scene{height:clamp(540px,43vw,640px);min-height:540px;justify-content:flex-start;padding-left:0;padding-right:0}
 .murom-scene .device{width:78%;margin:0;align-self:center}
 .murom-scene .device-screen{aspect-ratio:1690/741}
