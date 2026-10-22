@@ -2,6 +2,8 @@ const sectors={"food": "Кафе и рестораны", "beauty": "Красот
 const area=document.getElementById('project-list'),viewer=document.getElementById('art-viewer');let data=[],items=[],active=0,opener;
 fetch('projects.json?v=8').then(r=>{if(!r.ok)throw Error();return r.json()}).then(p=>{data=p;const key=new URLSearchParams(location.search).get('sector');if(sectors[key])select(key)}).catch(()=>{document.getElementById('gallery-heading').textContent='Не удалось загрузить галерею. Обновите страницу.'});
 const groups=[['stories','Истории'],['creative','Витрина / Креативы'],['posts','Публикации'],['qr','QR-коды']];
+const rowLimits={stories:4,creative:4,posts:2,qr:3};
+const rowFiles=(project,kind)=>project.images.filter(file=>file.kind===kind).slice(0,rowLimits[kind]);
 function dragStrip(strip){
  let startX=0,startScroll=0,dragged=false,pressed=false;
  strip.addEventListener('pointerdown',e=>{if(e.pointerType!=='mouse'||e.button!==0||strip.scrollWidth<=strip.clientWidth)return;pressed=true;dragged=false;startX=e.clientX;startScroll=strip.scrollLeft});
@@ -19,13 +21,12 @@ function select(key){
  for(const p of ps){
   const article=document.createElement('article');article.className='project-series';
   const title=document.createElement('h3');title.textContent=p.title;article.append(title);
-  const visible=p.images.filter(file=>file.kind!=='stories'&&file.kind!=='logo').length+Math.min(4,p.images.filter(file=>file.kind==='stories').length);
+  const visible=groups.reduce((total,[kind])=>total+rowFiles(p,kind).length,0);
   const info=document.createElement('p');info.textContent=visible+' макетов в подборке'+(p.id==='tyres-sign'?' · Визуализация, не фотография установленной вывески':'');article.append(info);
   for(const [kind,label] of groups){
-   const collection=p.images.filter(file=>file.kind===kind);
-   const files=kind==='stories'?collection.slice(0,4):collection;if(!files.length)continue;
+   const files=rowFiles(p,kind);if(!files.length)continue;
    const section=document.createElement('section');section.className='project-kind kind-'+kind;section.setAttribute('aria-label',label);
-   const grid=document.createElement('div');grid.className='art-grid';if(kind==='stories')grid.style.setProperty('--story-columns',files.length);
+   const grid=document.createElement('div');grid.className='art-grid';grid.style.setProperty('--row-columns',files.length);
    for(const file of files){
     const index=items.push(file)-1,b=document.createElement('button');b.className='art-thumb';b.setAttribute('aria-label','Открыть: '+label+' — '+file.alt);
     const img=document.createElement('img');img.src=file.src;img.alt=file.alt;img.loading='lazy';img.draggable=false;b.append(img);

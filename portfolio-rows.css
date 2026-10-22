@@ -1,0 +1,14 @@
+/* Each format is curated to one complete row; never leave an orphan row. */
+.project-kind .art-grid{grid-template-columns:repeat(var(--row-columns,4),minmax(0,1fr))}
+.kind-creative .art-grid{grid-template-columns:repeat(4,minmax(0,1fr))}
+.kind-posts .art-grid{grid-template-columns:repeat(2,minmax(0,1fr))}
+.kind-qr .art-grid{grid-template-columns:repeat(3,minmax(0,1fr))}
+.kind-posts .art-thumb{aspect-ratio:2/1;background:transparent}
+.kind-posts .art-thumb img{height:100%;max-height:none;object-fit:contain}
+@media(max-width:700px){
+ .project-kind .art-grid{display:flex;overflow-x:auto;gap:12px;scroll-snap-type:x mandatory;overscroll-behavior-x:contain;touch-action:pan-x pan-y;cursor:grab}
+ .project-kind .art-grid .art-thumb{flex:0 0 78%;max-width:none;width:auto;margin:0;scroll-snap-align:start}
+ .kind-stories .art-grid .art-thumb{flex-basis:66%}
+ .kind-posts .art-grid .art-thumb{flex-basis:90%}
+ .project-kind .art-grid:has(>.art-thumb:only-child){justify-content:center}
+}
