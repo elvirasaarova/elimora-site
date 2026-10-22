@@ -1,0 +1,8 @@
+/* The user-selected SMU fragment keeps its complete original aspect ratio. */
+.smu-scene{height:clamp(530px,45vw,630px);min-height:530px;justify-content:flex-start}
+.smu-scene .device{width:83%;margin:0}
+.approved-page{position:absolute;right:0;top:5%;width:34%;margin:0;background:#fff;border:1px solid #eee6f5;border-radius:10px;box-shadow:0 24px 45px #32144533;transform:rotate(3deg);z-index:2;overflow:hidden}
+.approved-page a{display:block;cursor:zoom-in}
+.approved-page img{display:block;width:100%;height:auto;max-height:none;aspect-ratio:auto;object-fit:contain;border-radius:0}
+.approved-page figcaption{font-size:12px;padding:11px 12px;color:#583570;background:#fff;line-height:1.4;letter-spacing:0}
+@media(max-width:700px){.smu-scene{display:block;height:auto;min-height:0;padding:32px 0 15px}.smu-scene .device{width:90%;margin:0 auto}.approved-page{position:relative;top:auto;right:auto;width:72%;margin:10px 3% 0 auto;transform:rotate(3deg)}.approved-page figcaption{font-size:11px}.smu-scene .scene-orbit{inset:2% 0 7%}}
