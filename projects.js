@@ -19,11 +19,13 @@ function select(key){
  for(const p of ps){
   const article=document.createElement('article');article.className='project-series';
   const title=document.createElement('h3');title.textContent=p.title;article.append(title);
-  const info=document.createElement('p');info.textContent=p.images.length+' макетов'+(p.id==='tyres-sign'?' · Визуализация, не фотография установленной вывески':'');article.append(info);
+  const visible=p.images.filter(file=>file.kind!=='stories').length+Math.min(4,p.images.filter(file=>file.kind==='stories').length);
+  const info=document.createElement('p');info.textContent=visible+' макетов в подборке'+(p.id==='tyres-sign'?' · Визуализация, не фотография установленной вывески':'');article.append(info);
   for(const [kind,label] of groups){
-   const files=p.images.filter(file=>file.kind===kind);if(!files.length)continue;
+   const collection=p.images.filter(file=>file.kind===kind);
+   const files=kind==='stories'?collection.slice(0,4):collection;if(!files.length)continue;
    const section=document.createElement('section');section.className='project-kind kind-'+kind;section.setAttribute('aria-label',label);
-   const grid=document.createElement('div');grid.className='art-grid';
+   const grid=document.createElement('div');grid.className='art-grid';if(kind==='stories')grid.style.setProperty('--story-columns',files.length);
    for(const file of files){
     const index=items.push(file)-1,b=document.createElement('button');b.className='art-thumb';b.setAttribute('aria-label','Открыть: '+label+' — '+file.alt);
     const img=document.createElement('img');img.src=file.src;img.alt=file.alt;img.loading='lazy';img.draggable=false;b.append(img);
