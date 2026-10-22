@@ -1,5 +1,6 @@
 /* ELIMORA / unified editorial system — October 2026 */
 :root{--heading-sans:Arial,Helvetica,sans-serif;--heading-accent:Georgia,'Times New Roman',serif;font-family:Arial,Helvetica,sans-serif}
+body{overflow-x:clip}
 h1,h2,h3,h4,.page-title,.hero-statement{font-family:var(--heading-sans);font-weight:600;letter-spacing:-.045em;line-height:1.12;text-wrap:balance}
 h1 em,h2 em,h3 em,h4 em,.hero-statement em,.material-lab h2 em,.quiz-intro em,.world-preview em,.page-title em{font-family:var(--heading-accent);font-style:italic;font-weight:400;letter-spacing:-.035em;color:var(--purple)}
 .hero-statement em{font-size:.92em}
