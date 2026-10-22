@@ -13,6 +13,8 @@
 .welcome-page{width:29%;top:2%;right:0;transform:rotate(3deg)}
 .murom-scene{height:clamp(540px,43vw,640px);min-height:540px;justify-content:flex-start;padding-left:0;padding-right:0}
 .murom-scene .device{width:78%;margin:0;align-self:center}
+.murom-scene .device-screen{aspect-ratio:1690/741}
+.murom-scene .device-screen img{object-fit:contain}
 .murom-details{position:absolute;right:0;top:10%;width:48%;display:grid;grid-template-columns:1fr 1fr;gap:14px;z-index:2;align-items:start}
 .murom-page{margin:0;border:1px solid #eee6f5;border-radius:9px;overflow:hidden;background:#fff;box-shadow:0 20px 40px #32144533;transform:rotate(3deg)}
 .murom-page:nth-child(2){margin-top:75px;transform:rotate(-3deg)}
