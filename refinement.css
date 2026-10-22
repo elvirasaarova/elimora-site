@@ -123,10 +123,10 @@ h1 em,h2 em,h3 em,h4 em,.hero-statement em,.material-lab h2 em,.quiz-intro em,.w
 .about-layout>div{max-width:none;align-self:start}
 .account-preview h2{font-size:28px;margin:16px 0}
 .account-preview p{font-size:17px;line-height:1.65;margin:0}
-.about-portrait{position:relative;min-height:440px;max-width:430px;justify-self:end;margin:0;background:#d0fa42;border-radius:50% 30% 40% 25%;isolation:isolate}
-.portrait-words{position:absolute;top:34px;left:30px;font-size:44px;font-weight:800;line-height:1;letter-spacing:-.055em;color:#251037}
-.about-portrait img{position:absolute;right:0;bottom:58px;width:94%;height:auto;border:7px solid #fff;border-radius:7px;transform:rotate(7deg);box-shadow:0 18px 35px #3d1b5733}
+.about-portrait{position:relative;min-height:520px;max-width:430px;justify-self:end;margin:0;background:#d0fa42;border-radius:50% 30% 40% 25%;isolation:isolate}
+.portrait-words{position:absolute;top:34px;left:30px;font-size:42px;font-weight:800;line-height:1;letter-spacing:-.055em;color:#251037}
+.about-portrait img{position:absolute;right:0;bottom:70px;width:90%;height:auto;border:7px solid #fff;border-radius:7px;transform:rotate(7deg);box-shadow:0 18px 35px #3d1b5733}
 .about-portrait figcaption{position:absolute;bottom:24px;left:30px;font-size:13px;color:#251037;margin:0}
-@media(max-width:850px){.about-layout{grid-template-columns:1fr;gap:35px}.about-portrait{width:calc(100% - 20px);max-width:400px;justify-self:center;min-height:410px}.portrait-words{font-size:40px}.about-portrait img{border-radius:7px}}
+@media(max-width:850px){.about-layout{grid-template-columns:1fr;gap:35px}.about-portrait{width:calc(100% - 20px);max-width:400px;justify-self:center;min-height:480px}.portrait-words{font-size:36px}.about-portrait img{border-radius:7px}}
 .art-pause.art-pause-dark figcaption{top:50%;bottom:auto;color:#fff;text-shadow:none}
 @media(max-width:700px){.art-pause.art-pause-dark{height:350px}.art-pause.art-pause-dark figcaption{left:6%;max-width:88%;font-size:34px}}
