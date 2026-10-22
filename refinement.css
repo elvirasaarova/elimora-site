@@ -1,6 +1,6 @@
 /* ELIMORA / unified editorial system — October 2026 */
 :root{--heading-sans:Arial,Helvetica,sans-serif;--heading-accent:Georgia,'Times New Roman',serif;font-family:Arial,Helvetica,sans-serif}
-body{overflow-x:clip}
+html,body{overflow-x:clip}
 h1,h2,h3,h4,.page-title,.hero-statement{font-family:var(--heading-sans);font-weight:600;letter-spacing:-.045em;line-height:1.12;text-wrap:balance}
 h1 em,h2 em,h3 em,h4 em,.hero-statement em,.material-lab h2 em,.quiz-intro em,.world-preview em,.page-title em{font-family:var(--heading-accent);font-style:italic;font-weight:400;letter-spacing:-.035em;color:var(--purple)}
 .hero-statement em{font-size:.92em}
@@ -15,7 +15,7 @@ h1 em,h2 em,h3 em,h4 em,.hero-statement em,.material-lab h2 em,.quiz-intro em,.w
 .result-heading{flex:1;min-width:260px;font-weight:600}
 .result-price{display:flex;flex-direction:column;gap:10px;flex-shrink:0;line-height:1.05;letter-spacing:-.055em;font-variant-numeric:tabular-nums}
 .result-price .small{display:block;font-family:var(--heading-sans);font-size:15px;font-weight:400;line-height:1.4;letter-spacing:0;margin:0;white-space:normal;color:#64546f}
-.art-pause{position:relative;isolation:isolate;width:100vw;margin:30px 0 55px calc(50% - 50vw);min-height:340px;height:clamp(340px,32vw,560px);overflow:hidden;mask-image:linear-gradient(transparent,#000 8%,#000 90%,transparent)}
+.art-pause{position:relative;isolation:isolate;width:var(--viewport-width,100%);margin:30px 0 55px calc(50% - var(--viewport-width,100%)/2);min-height:340px;height:clamp(340px,32vw,560px);overflow:hidden;mask-image:linear-gradient(transparent,#000 8%,#000 90%,transparent)}
 .art-pause img{width:100%;height:100%;object-fit:cover;transition:transform 1.2s}
 .art-pause:hover img{transform:scale(1.035)}
 .art-pause figcaption{position:absolute;bottom:12%;left:max(6vw,calc((100vw - 1220px)/2));font-size:clamp(36px,4.5vw,72px);line-height:1.05;font-weight:600;letter-spacing:-.055em;color:#281039;text-shadow:0 1px 24px #fff}

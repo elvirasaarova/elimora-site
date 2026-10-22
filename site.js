@@ -1,2 +1,3 @@
+const fitArt=()=>document.documentElement.style.setProperty('--viewport-width',document.documentElement.clientWidth+'px');fitArt();addEventListener('resize',fitArt,{passive:true});
 document.querySelectorAll('.site-header nav a').forEach(a=>{if(a.pathname===location.pathname)a.setAttribute('aria-current','page')});
 if(!matchMedia('(prefers-reduced-motion: reduce)').matches){const obs=new IntersectionObserver(es=>es.forEach(e=>{if(e.isIntersecting){e.target.classList.add('in-view');obs.unobserve(e.target)}}),{threshold:.08});document.querySelectorAll('.material-lab,.process-lab,.world-preview,.service-row,.package,.project-series').forEach(e=>{e.classList.add('reveal');obs.observe(e)})}
