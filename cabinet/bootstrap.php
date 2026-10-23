@@ -106,7 +106,7 @@ function storage(): string {
     return $dir;
 }
 function migrate(): void {
-    if (query("SELECT value FROM em_settings WHERE name='schema_version'")->fetchColumn()==='2') return;
+    if (query("SELECT value FROM em_settings WHERE name='schema_version'")->fetchColumn()==='4') return;
     $lock='elimora-schema-'.substr(hash('sha256',config()['db_name']),0,20);
     if ((int)query('SELECT GET_LOCK(?,10)',[$lock])->fetchColumn()!==1) throw new RuntimeException('schema lock');
     try {
@@ -118,7 +118,23 @@ function migrate(): void {
             db()->exec("UPDATE em_files SET category='media' WHERE mime LIKE 'image/%'");
         }
         db()->exec("CREATE TABLE IF NOT EXISTS em_uploads (id CHAR(64) PRIMARY KEY, order_id BIGINT UNSIGNED NOT NULL, user_id BIGINT UNSIGNED NOT NULL, original_name VARCHAR(200) NOT NULL, category VARCHAR(20) NOT NULL, expected_bytes BIGINT NOT NULL, received_bytes BIGINT NOT NULL DEFAULT 0, created_at BIGINT NOT NULL, INDEX(user_id), INDEX(created_at)) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4");
-        query("INSERT INTO em_settings (name,value) VALUES ('schema_version','2') ON DUPLICATE KEY UPDATE value='2'");
+        $columns=query('SHOW COLUMNS FROM em_orders')->fetchAll(PDO::FETCH_COLUMN);
+        foreach (['kind'=>"VARCHAR(20) NOT NULL DEFAULT 'design'",'released'=>"TINYINT NOT NULL DEFAULT 0",'access_note'=>"TEXT NULL",'access_reported'=>"TINYINT NOT NULL DEFAULT 0"] as $name=>$type) if (!in_array($name,$columns,true)) db()->exec("ALTER TABLE em_orders ADD $name $type");
+        foreach (['em_files','em_uploads'] as $table) {
+            $columns=query("SHOW COLUMNS FROM $table")->fetchAll(PDO::FETCH_COLUMN);
+            if (!in_array('purpose',$columns,true)) db()->exec("ALTER TABLE $table ADD purpose VARCHAR(20) NOT NULL DEFAULT 'material'");
+        }
+        $columns=query('SHOW COLUMNS FROM em_files')->fetchAll(PDO::FETCH_COLUMN);
+        if (!in_array('review_id',$columns,true)) db()->exec('ALTER TABLE em_files ADD review_id BIGINT UNSIGNED NULL');
+        db()->exec("CREATE TABLE IF NOT EXISTS em_reviews (id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY, order_id BIGINT UNSIGNED NOT NULL, state VARCHAR(20) NOT NULL DEFAULT 'pending', note TEXT NOT NULL, feedback TEXT NULL, created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP, decided_at TIMESTAMP NULL, INDEX(order_id)) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4");
+        db()->exec("CREATE TABLE IF NOT EXISTS em_payments (id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY, order_id BIGINT UNSIGNED NOT NULL, title VARCHAR(200) NOT NULL, amount_minor BIGINT UNSIGNED NOT NULL, status VARCHAR(20) NOT NULL DEFAULT 'pending', note TEXT NOT NULL, created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP, updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP, INDEX(order_id)) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4");
+        db()->exec("CREATE TABLE IF NOT EXISTS em_notifications (id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY, user_id BIGINT UNSIGNED NOT NULL, order_id BIGINT UNSIGNED NOT NULL, body VARCHAR(500) NOT NULL, seen TINYINT NOT NULL DEFAULT 0, created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP, INDEX(user_id,seen)) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4");
+        db()->exec("CREATE TABLE IF NOT EXISTS em_briefs (id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY, order_id BIGINT UNSIGNED NOT NULL, payload MEDIUMTEXT NOT NULL, created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP, INDEX(order_id)) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4");
+        $columns=query('SHOW COLUMNS FROM em_files')->fetchAll(PDO::FETCH_COLUMN);
+        if (!in_array('payment_id',$columns,true)) db()->exec('ALTER TABLE em_files ADD payment_id BIGINT UNSIGNED NULL');
+        $columns=query('SHOW COLUMNS FROM em_uploads')->fetchAll(PDO::FETCH_COLUMN);
+        if (!in_array('payment_id',$columns,true)) db()->exec('ALTER TABLE em_uploads ADD payment_id BIGINT UNSIGNED NULL');
+        query("INSERT INTO em_settings (name,value) VALUES ('schema_version','4') ON DUPLICATE KEY UPDATE value='4'");
     } finally { query('SELECT RELEASE_LOCK(?)',[$lock]); }
 }
 function file_category(string $category): string {
@@ -170,4 +186,21 @@ function notify_admin(int $id): void {
     if (!filter_var($to,FILTER_VALIDATE_EMAIL)) return;
     // Notification contains no brief or personal details; full information stays behind login.
     @mail($to,'ELIMORA: new project #'.$id,"Новая заявка №$id.\nОткройте https://elimora.ru/account.html",'From: ELIMORA <no-reply@elimora.ru>');
+}
+
+function purpose(array $d,array $u): string {
+    $v=$d['purpose']??'material';
+    if (!in_array($v,['material','review','contract','invoice','act','qr','final'],true)) fail('Некорректное назначение файла.');
+    if ($v!=='material' && $u['role']!=='admin') fail('Результаты и документы добавляет администратор.',403);
+    return $v;
+}
+function notify_project(array $o,string $body,bool $toAdmin=false): void {
+    $ids=$toAdmin?query("SELECT id FROM em_users WHERE role='admin'")->fetchAll(PDO::FETCH_COLUMN):[$o['user_id']];
+    foreach ($ids as $uid) query('INSERT INTO em_notifications (user_id,order_id,body) VALUES (?,?,?)',[$uid,$o['id'],$body]);
+    $mail=$toAdmin?config()['admin_email']:query('SELECT email FROM em_users WHERE id=?',[$o['user_id']])->fetchColumn();
+    // Email contains no attachments, financial amounts or client material.
+    @mail($mail,'ELIMORA: project update',"В вашем кабинете есть обновление по проекту №".$o['id'].".\nhttps://elimora.ru/account.html",'From: ELIMORA <no-reply@elimora.ru>');
+}
+function visible_file(array $f,array $o,array $u): bool {
+    return $u['role']==='admin' || ($f['purpose']==='final'?(bool)$o['released']:($f['purpose']!=='review' || !empty($f['review_id'])));
 }

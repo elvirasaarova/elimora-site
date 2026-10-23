@@ -1,4 +1,4 @@
 Options -Indexes
-<FilesMatch "^(bootstrap\.php|schema\.sql)$">
+<FilesMatch "^((?:bootstrap|workflow)\.php|schema\.sql)$">
     Require all denied
 </FilesMatch>

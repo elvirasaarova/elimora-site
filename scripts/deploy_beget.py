@@ -38,7 +38,7 @@ def public_file(name):
     if len(p.parts) == 1:
         return p.suffix.lower() in PUBLIC_EXTENSIONS
     if p.parts[0] == 'cabinet':
-        return len(p.parts) == 2 and p.name in {'api.php', 'bootstrap.php', 'schema.sql'}
+        return len(p.parts) == 2 and p.name in {'api.php', 'bootstrap.php', 'workflow.php', 'schema.sql'}
     return p.parts[0] == 'assets' and p.suffix.lower() in ASSET_EXTENSIONS
 
 

@@ -21,7 +21,7 @@ ROOT=Path(__file__).resolve().parents[1]
 def check_allowlist():
     import runpy
     public=runpy.run_path(str(ROOT/'scripts/deploy_beget.py'))['public_file']
-    for n in ['index.html','cabinet/api.php','cabinet/bootstrap.php','cabinet/schema.sql','cabinet/.htaccess','assets/portrait.webp']:
+    for n in ['index.html','cabinet/api.php','cabinet/bootstrap.php','cabinet/workflow.php','cabinet/schema.sql','cabinet/.htaccess','assets/portrait.webp']:
         assert public(n),n
     for n in ['.env','elimora-config.php','scripts/elimora-config.example.php','cabinet/config.php','cabinet/uploads/private.pdf','uploads/a.pdf','../a.json','/a.json','.git/config']:
         assert not public(n),n
@@ -95,8 +95,8 @@ def integration():
             def chunk(token,content,offset=0,client=one):
                 body=(f'--{boundary}\r\nContent-Disposition: form-data; name="upload"\r\n\r\n{token}\r\n--{boundary}\r\nContent-Disposition: form-data; name="offset"\r\n\r\n{offset}\r\n--{boundary}\r\nContent-Disposition: form-data; name="chunk"; filename="chunk.bin"\r\nContent-Type: application/octet-stream\r\n\r\n').encode()+content+f'\r\n--{boundary}--\r\n'.encode()
                 return client.request('upload-chunk',extra=suffix,raw=(body,'multipart/form-data; boundary='+boundary))
-            def begin(name,content,category='media'):
-                code,result=one.request('upload-begin',{'name':name,'size':len(content),'category':category},suffix)
+            def begin(name,content,category='media',client=one,purpose='material',payment=None):
+                code,result=client.request('upload-begin',{'name':name,'size':len(content),'category':category,'purpose':purpose,'payment':payment},suffix)
                 assert code==200,result
                 return result['upload']
             assert one.request('upload-begin',{'name':'phone.heic','size':10,'category':'media'},suffix)[0]==400
@@ -136,11 +136,87 @@ def integration():
             assert admin.request('order',extra=suffix)[0]==200
             assert admin.request('status-change',{'status':'work'},suffix)[0]==200
             assert one.request('order',extra=suffix)[1]['order']['status']=='work'
+            # Paid briefing, versioned approval, invoice/QR and final delivery workflow.
+            brief={'products':'Services','goals':'Explain our offer','audience':'Local customers','links':'https://example.test'}
+            assert one.request('brief-submit',brief,suffix)[0]==403
+            assert one.request('payment-create',{'title':'Deposit','amount_minor':500000},suffix)[0]==403
+            assert admin.request('project-settings',{'kind':'maps','access_note':'Invite studio@example.test'},suffix)[0]==200
+            code,p=admin.request('payment-create',{'title':'Deposit','amount_minor':500000,'note':'Payment by invoice'},suffix)
+            assert code==200,p
+            payment=p['payment']
+            pdf=b'%PDF-1.4\n1 0 obj\n<</Type/Catalog>>\nendobj\n%%EOF'
+            token=begin('invoice.pdf',pdf,'documents',admin,'invoice',payment)
+            assert chunk(token,pdf,client=admin)[1]['complete'] is True
+            token=begin('payment-qr.png',png,'media',admin,'qr',payment)
+            assert chunk(token,png,client=admin)[1]['complete'] is True
+            assert two.request('payment-update',{'payment':payment,'status':'reported'},suffix)[0]==404
+            assert one.request('payment-update',{'payment':payment,'status':'paid'},suffix)[0]==403
+            assert one.request('payment-update',{'payment':payment,'status':'reported'},suffix)[0]==200
+            assert one.request('brief-submit',brief,suffix)[0]==403
+            assert admin.request('payment-update',{'payment':payment,'status':'paid'},suffix)[0]==200
+            assert one.request('brief-submit',brief,suffix)[0]==200
+            assert one.request('order',extra=suffix)[1]['order']['detailed_brief']['answers']['goals']=='Explain our offer'
+            assert two.request('payments')[1]['payments']==[]
+            token=begin('preview-v1.png',png,'media',admin,'review')
+            assert chunk(token,png,client=admin)[1]['complete'] is True
+            assert not [f for f in one.request('order',extra=suffix)[1]['order']['files'] if f['purpose']=='review']
+            assert one.request('review-publish',{'note':'Version 1'},suffix)[0]==403
+            assert admin.request('review-publish',{'note':'Version 1'},suffix)[0]==200
+            o=one.request('order',extra=suffix)[1]['order'];review=o['reviews'][0]['id']
+            review_file=next(f for f in o['files'] if f['purpose']=='review');review_suffix=suffix+'&file='+str(review_file['id'])
+            assert one.request('download',extra=review_suffix)[0]==403
+            assert one.request('preview',extra=review_suffix)==(200,png)
+            assert one.request('review-answer',{'review':review,'decision':'changes','feedback':''},suffix)[0]==400
+            assert one.request('review-answer',{'review':review,'decision':'changes','feedback':'Change title'},suffix)[0]==200
+            assert one.request('review-answer',{'review':review,'decision':'approved'},suffix)[0]==409
+            assert one.request('order',extra=suffix)[1]['order']['status']=='work'
+            assert admin.request('delete-file',{},review_suffix)[0]==409
+            token=begin('preview-v2.png',png,'media',admin,'review')
+            assert chunk(token,png,client=admin)[1]['complete'] is True
+            assert admin.request('review-publish',{'note':'Version 2'},suffix)[0]==200
+            o=one.request('order',extra=suffix)[1]['order'];review=o['reviews'][0]['id']
+            assert len(o['reviews'])==2
+            assert two.request('review-answer',{'review':review,'decision':'approved'},suffix)[0]==404
+            assert one.request('review-answer',{'review':review,'decision':'approved'},suffix)[0]==200
+            assert one.request('order',extra=suffix)[1]['order']['status']=='access'
+            assert admin.request('release',{},suffix)[0]==400
+            assert one.request('access-report',{},suffix)[0]==200
+            assert admin.request('status-change',{'status':'delivery'},suffix)[0]==200
+            token=begin('final.png',png,'media',admin,'final')
+            assert chunk(token,png,client=admin)[1]['complete'] is True
+            final=next(f for f in admin.request('order',extra=suffix)[1]['order']['files'] if f['purpose']=='final')
+            final_suffix=suffix+'&file='+str(final['id'])
+            assert one.request('download',extra=final_suffix)[0]==404
+            code,p=admin.request('payment-create',{'title':'Balance','amount_minor':500000},suffix)
+            assert code==200
+            assert admin.request('release',{},suffix)[0]==400
+            assert admin.request('payment-update',{'payment':p['payment'],'status':'paid'},suffix)[0]==200
+            assert one.request('release',{},suffix)[0]==403
+            assert admin.request('release',{},suffix)[0]==200
+            assert one.request('order',extra=suffix)[1]['order']['status']=='done'
+            assert one.request('download',extra=final_suffix)==(200,png)
+            assert one.request('download',extra=review_suffix)==(200,png)
+            assert one.request('notifications')[1]['notifications']
+            assert two.request('notifications')[1]['notifications']==[]
+            assert one.request('notifications-read',{})[0]==200
+            assert all(int(n['seen'])==1 for n in one.request('notifications')[1]['notifications'])
+            # A repeat request stays in this same client's project history.
+            other=dict(order);other['title']='Repeat design project';other['answers']={'tasks':['visual']}
+            code,new=one.request('create',other);assert code==200
+            assert len(one.request('orders')[1]['orders'])==2
+            suffix='&id='+str(new['id'])
+            token=begin('creative.png',png,'media',admin,'review')
+            assert chunk(token,png,client=admin)[1]['complete'] is True
+            assert admin.request('review-publish',{'note':'Creative'},suffix)[0]==200
+            review=one.request('order',extra=suffix)[1]['order']['reviews'][0]['id']
+            assert one.request('review-answer',{'review':review,'decision':'approved'},suffix)[0]==200
+            assert one.request('order',extra=suffix)[1]['order']['status']=='delivery'
+            assert admin.request('release',{},suffix)[0]==200
             assert one.request('delete-file',{},file_suffix)[0]==200
             assert one.request('download',extra=file_suffix)[0]==404
             assert one.request('logout',{})[0]==200
             assert one.request('orders')[0]==401
-            print('Passed: 8-character passwords, required company, 30-photo batch, chunk offsets and ownership, MIME validation, Word/Excel/brand files, private previews; installation lock, login, registration, CSRF, client isolation, admin access, messages, upload/download/delete, logout')
+            print('Passed: payment-gated briefing, invoice and QR, versioned changes/approval, access handoff, guarded final release, private notifications, repeat project history; 8-character passwords, required company, 30-photo batch, chunk offsets and ownership, MIME validation, Word/Excel/brand files, private previews; installation lock, login, registration, CSRF, client isolation, admin access, messages, upload/download/delete, logout')
         finally:server.terminate();server.wait(timeout=10)
 
 

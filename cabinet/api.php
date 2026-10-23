@@ -75,9 +75,18 @@ try {
     }
     $u=user();
     if ($action==='logout') { post(); $_SESSION=[]; session_regenerate_id(true); reply(['ok'=>true]); }
+    if ($action==='notifications') {
+        reply(['notifications'=>query('SELECT id,order_id,body,seen,created_at FROM em_notifications WHERE user_id=? ORDER BY id DESC LIMIT 30',[$u['id']])->fetchAll()]);
+    }
+    if ($action==='notifications-read') {post();query('UPDATE em_notifications SET seen=1 WHERE user_id=?',[$u['id']]);reply(['ok'=>true]);}
+    if ($action==='payments') {
+        $sql='SELECT p.*,o.company,o.title AS project_title FROM em_payments p JOIN em_orders o ON o.id=p.order_id';$args=[];
+        if($u['role']!=='admin'){$sql.=' WHERE o.user_id=?';$args[]=$u['id'];}
+        reply(['payments'=>query($sql.' ORDER BY p.id DESC LIMIT 500',$args)->fetchAll()]);
+    }
     if ($action==='orders') {
         if ($_SERVER['REQUEST_METHOD']!=='GET') fail('Нужен GET-запрос.',405);
-        $sql='SELECT o.id,o.company,o.title,o.status,o.created_at,o.updated_at,u.name,u.email FROM em_orders o JOIN em_users u ON u.id=o.user_id';
+        $sql='SELECT o.id,o.company,o.title,o.kind,o.released,o.status,o.created_at,o.updated_at,u.name,u.email FROM em_orders o JOIN em_users u ON u.id=o.user_id';
         $args=[];
         if ($u['role']!=='admin') { $sql.=' WHERE o.user_id=?'; $args[]=$u['id']; }
         $sql.=' ORDER BY o.updated_at DESC,o.id DESC LIMIT 100';
@@ -85,9 +94,9 @@ try {
     }
     if ($action==='files') {
         if ($_SERVER['REQUEST_METHOD']!=='GET') fail('Нужен GET-запрос.',405);
-        $sql='SELECT f.id,f.order_id,f.original_name,f.bytes,f.mime,f.category,f.user_id,f.created_at,o.company,o.title FROM em_files f JOIN em_orders o ON o.id=f.order_id';
+        $sql='SELECT f.id,f.order_id,f.original_name,f.bytes,f.mime,f.category,f.purpose,f.review_id,f.payment_id,o.released,f.user_id,f.created_at,o.company,o.title FROM em_files f JOIN em_orders o ON o.id=f.order_id';
         $args=[];
-        if ($u['role']!=='admin') {$sql.=' WHERE o.user_id=?';$args[]=$u['id'];}
+        if ($u['role']!=='admin') {$sql.=" WHERE o.user_id=? AND (f.purpose<>'review' OR f.review_id IS NOT NULL) AND (f.purpose<>'final' OR o.released=1)";$args[]=$u['id'];}
         reply(['files'=>query($sql.' ORDER BY f.id DESC LIMIT 1000',$args)->fetchAll()]);
     }
     if ($action==='create') {
@@ -101,13 +110,18 @@ try {
         // Store questionnaire answers as a proposal, never as a confirmed price or invoice.
         $proposal=json_encode(['answers'=>$draft,'consent'=>'privacy-2026-10','consent_at'=>gmdate('c')],JSON_UNESCAPED_UNICODE|JSON_THROW_ON_ERROR);
         query('INSERT INTO em_orders (user_id,company,title,brief,proposal) VALUES (?,?,?,?,?)',[$u['id'],$company,$title,$brief,$proposal]);
-        $id=(int)db()->lastInsertId(); notify_admin($id); reply(['id'=>$id]);
+        $id=(int)db()->lastInsertId(); $kind=in_array('maps',$draft['tasks']??[],true)?'maps':'design';query('UPDATE em_orders SET kind=? WHERE id=?',[$kind,$id]); notify_admin($id); reply(['id'=>$id]);
     }
     $id=filter_var($_GET['id']??null,FILTER_VALIDATE_INT,['options'=>['min_range'=>1]]);
     if (!$id) fail('Некорректный номер заявки.');
     $o=project($id,$u);
+    require __DIR__.'/workflow.php';
     if ($action==='upload-begin') {
         $d=post(); limit('upload-start',400,3600,(string)$u['id']);
+        $filePurpose=purpose($d,$u);
+        $paymentId=filter_var($d['payment']??null,FILTER_VALIDATE_INT)?:null;
+        if (in_array($filePurpose,['invoice','qr'],true) && (!$paymentId || !query('SELECT id FROM em_payments WHERE id=? AND order_id=?',[$paymentId,$id])->fetchColumn())) fail('Выберите платёж для счёта или QR-кода.');
+        if ($filePurpose==='review' && (int)$o['released']) fail('Проект уже завершён. Для новой работы создайте отдельный проект.');
         $name=file_name(field($d,'name',200)); $category=file_category(field($d,'category',20));
         $size=filter_var($d['size']??null,FILTER_VALIDATE_INT,['options'=>['min_range'=>1,'max_range'=>150*1024*1024]]);
         if (!$size) fail('Один файл — не больше 150 МБ.');
@@ -124,7 +138,7 @@ try {
             db()->rollBack(); fail('Дождитесь завершения текущей загрузки или освободите место.');
         }
         $token=bin2hex(random_bytes(32));
-        query('INSERT INTO em_uploads (id,order_id,user_id,original_name,category,expected_bytes,created_at) VALUES (?,?,?,?,?,?,?)',[$token,$id,$u['id'],$name,$category,$size,time()]);
+        query('INSERT INTO em_uploads (id,order_id,user_id,original_name,category,purpose,payment_id,expected_bytes,created_at) VALUES (?,?,?,?,?,?,?,?,?)',[$token,$id,$u['id'],$name,$category,$filePurpose,$paymentId,$size,time()]);
         db()->commit(); reply(['upload'=>$token,'chunk_bytes'=>2*1024*1024]);
     }
     if ($action==='upload-chunk' || $action==='upload-cancel') {
@@ -153,12 +167,14 @@ try {
         query('UPDATE em_uploads SET received_bytes=? WHERE id=?',[$received,$token]);db()->commit();
         if ($received<(int)$upload['expected_bytes']) reply(['received'=>$received,'complete'=>false]);
         $mime=file_mime($part,$upload['original_name'],$upload['category']);
+        if ($upload['purpose']==='qr' && !in_array($mime,['image/jpeg','image/png'],true)) fail('QR-код — PNG или JPEG.');
+        if ($upload['purpose']==='review' && !in_array($mime,['image/jpeg','image/png','image/webp','application/pdf','video/mp4','video/quicktime'],true)) fail('Для согласования — JPG, PNG, WEBP, PDF или MP4/MOV. Финальные архивы можно добавить отдельным согласуемым PDF со ссылкой в комментарии.');
         db()->beginTransaction();file_budget((int)$u['id'],$id,$received);
         // Row lock and exact ownership prevent double finalization of a temporary upload.
         if (!query('SELECT id FROM em_uploads WHERE id=? FOR UPDATE',[$token])->fetchColumn()) {db()->rollBack();fail('Загрузка уже завершена.',409);}
         if (!rename($part,storage().'/'.$token)) throw new RuntimeException('chunk finalize');
         try {
-            query('INSERT INTO em_files (order_id,user_id,original_name,storage_name,bytes,mime,category) VALUES (?,?,?,?,?,?,?)',[$id,$u['id'],$upload['original_name'],$token,$received,$mime,$upload['category']]);
+            query('INSERT INTO em_files (order_id,user_id,original_name,storage_name,bytes,mime,category,purpose,payment_id) VALUES (?,?,?,?,?,?,?,?,?)',[$id,$u['id'],$upload['original_name'],$token,$received,$mime,$upload['category'],$upload['purpose'],$upload['payment_id']]);
             query('DELETE FROM em_uploads WHERE id=?',[$token]);query('UPDATE em_orders SET updated_at=CURRENT_TIMESTAMP WHERE id=?',[$id]);db()->commit();
         } catch (Throwable $e) { if(db()->inTransaction())db()->rollBack();@rename(storage().'/'.$token,$part);throw $e; }
         reply(['received'=>$received,'complete'=>true]);
@@ -166,7 +182,12 @@ try {
     if ($action==='order') {
         $owner=query('SELECT name,email FROM em_users WHERE id=?',[$o['user_id']])->fetch();
         $o['messages']=query('SELECT m.id,m.body,m.created_at,u.name,u.role FROM em_messages m JOIN em_users u ON u.id=m.user_id WHERE m.order_id=? ORDER BY m.id',[$id])->fetchAll();
-        $o['files']=query('SELECT id,original_name,bytes,mime,category,user_id,created_at FROM em_files WHERE order_id=? ORDER BY id',[$id])->fetchAll();
+        $files=query('SELECT id,original_name,bytes,mime,category,purpose,review_id,payment_id,user_id,created_at FROM em_files WHERE order_id=? ORDER BY id',[$id])->fetchAll();
+        $o['files']=array_values(array_filter($files,fn($f)=>visible_file($f,$o,$u)));
+        $o['reviews']=query('SELECT * FROM em_reviews WHERE order_id=? ORDER BY id DESC',[$id])->fetchAll();
+        $o['payments']=query('SELECT * FROM em_payments WHERE order_id=? ORDER BY id DESC',[$id])->fetchAll();
+        $latestBrief=query('SELECT id,payload,created_at FROM em_briefs WHERE order_id=? ORDER BY id DESC LIMIT 1',[$id])->fetch();
+        $o['detailed_brief']=$latestBrief?['id'=>$latestBrief['id'],'answers'=>json_decode($latestBrief['payload'],true),'created_at'=>$latestBrief['created_at']]:null;
         $o['owner']=$owner; $o['proposal']=json_decode($o['proposal'],true); reply(['order'=>$o]);
     }
     if ($action==='message') {
@@ -178,6 +199,8 @@ try {
         $d=post(); if ($u['role']!=='admin') fail('Доступ запрещён.',403);
         $status=field($d,'status',30);
         $labels=['new'=>'Новая заявка','discussion'=>'Обсуждаем задачу','materials'=>'Жду материалы','work'=>'В работе','review'=>'На согласовании','done'=>'Готово'];
+        if (in_array($status,['review','done'],true)) fail('Используйте отправку на согласование или выдачу результата.');
+        $labels+=['payment'=>'Оплата','access'=>'Доступы Яндекса','delivery'=>'Выдача результата'];
         if (!isset($labels[$status])) fail('Некорректный статус.');
         db()->beginTransaction();
         query('UPDATE em_orders SET status=? WHERE id=?',[$status,$id]);
@@ -207,17 +230,19 @@ try {
     if ($action==='download' || $action==='preview' || $action==='delete-file') {
         $fid=filter_var($_GET['file']??null,FILTER_VALIDATE_INT,['options'=>['min_range'=>1]]);
         $f=query('SELECT * FROM em_files WHERE id=? AND order_id=?',[$fid?:0,$id])->fetch();
-        if (!$f || !preg_match('/^[a-f0-9]{64}$/',$f['storage_name'])) fail('Файл не найден.',404);
+        if (!$f || !visible_file($f,$o,$u) || !preg_match('/^[a-f0-9]{64}$/',$f['storage_name'])) fail('Файл не найден.',404);
         $path=storage().'/'.$f['storage_name'];
+        if ($u['role']!=='admin' && $f['purpose']==='review' && $action==='download' && !(int)$o['released']) fail('Скачивание финальных материалов откроется после выдачи результата.',403);
         if ($action==='delete-file') {
             post(); if ($u['role']!=='admin' && (int)$f['user_id']!==(int)$u['id']) fail('Можно удалить только свои материалы.',403);
+            if (!empty($f['review_id'])) fail('Файл опубликованной версии остаётся в истории. Добавьте новую версию вместо удаления.',409);
             if (is_file($path) && !unlink($path)) throw new RuntimeException('file delete');
             query('DELETE FROM em_files WHERE id=?',[$fid]); reply(['ok'=>true]);
         }
         if (!is_file($path)) fail('Файл не найден.',404);
         session_write_close();
         if ($action==='preview') {
-            if (!in_array($f['mime'],['image/jpeg','image/png','image/webp'],true)) fail('Предпросмотр недоступен.',415);
+            if (!in_array($f['mime'],['image/jpeg','image/png','image/webp','application/pdf','video/mp4','video/quicktime'],true)) fail('Предпросмотр недоступен.',415);
             header('Content-Length: '.filesize($path));header('Content-Type: '.$f['mime']);header('Content-Disposition: inline');readfile($path);exit;
         }
         header('Content-Length: '.filesize($path));
