@@ -15,6 +15,16 @@ PUBLIC_EXTENSIONS = {'.html', '.css', '.js', '.mjs', '.json', '.xml', '.txt'}
 ASSET_EXTENSIONS = {'.webp', '.png', '.jpg', '.jpeg', '.svg', '.gif', '.avif', '.ico', '.woff', '.woff2', '.ttf', '.otf', '.mp4', '.webm', '.pdf'}
 
 
+class BegetFTPS(ftplib.FTP_TLS):
+    """Reuse the authenticated TLS session for Beget's protected data channel."""
+    def ntransfercmd(self, cmd, rest=None):
+        connection, size = ftplib.FTP.ntransfercmd(self, cmd, rest)
+        if self._prot_p:
+            connection = self.context.wrap_socket(
+                connection, server_hostname=self.host, session=self.sock.session)
+        return connection, size
+
+
 def public_file(name):
     p = PurePosixPath(name)
     if p.is_absolute() or '..' in p.parts:
@@ -38,7 +48,7 @@ def deploy():
     if not {'index.html', 'app.js', 'recommendation.mjs', '.htaccess'} <= files.keys():
         raise RuntimeError('Required website files missing; upload cancelled')
     # Certificate and hostname verification are mandatory. Never fall back to plain FTP.
-    with ftplib.FTP_TLS(context=ssl.create_default_context(), timeout=60) as ftp:
+    with BegetFTPS(context=ssl.create_default_context(), timeout=60) as ftp:
         print('Connecting to FTPS server', flush=True)
         ftp.connect(values['FTP_SERVER'], 21)
         print('Authenticating over TLS', flush=True)
