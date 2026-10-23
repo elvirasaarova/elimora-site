@@ -16,6 +16,19 @@ jobs:
   deploy:
     runs-on: ubuntu-24.04
     timeout-minutes: 20
+    services:
+      mysql:
+        image: mysql:8.4
+        env:
+          MYSQL_ROOT_PASSWORD: ci-only-password
+          MYSQL_DATABASE: elimora_test
+        ports:
+          - 3306:3306
+        options: >-
+          --health-cmd="mysqladmin ping -h localhost -pci-only-password"
+          --health-interval=10s
+          --health-timeout=5s
+          --health-retries=10
     steps:
       - name: Checkout source
         uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
@@ -23,6 +36,12 @@ jobs:
           persist-credentials: false
       - name: Check recommendation logic
         run: node --test tests/recommendation.test.mjs
+      - name: Check cabinet PHP syntax and isolation
+        env:
+          CI_DB_PASSWORD: ci-only-password
+        run: |
+          find cabinet -name '*.php' -print0 | xargs -0 -n1 php -l
+          python3 tests/cabinet_checks.py
       - name: Upload website over explicit FTPS
         env:
           FTP_SERVER: ${{ secrets.FTP_SERVER }}
