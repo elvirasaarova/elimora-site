@@ -13,6 +13,34 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
+  connection-diagnostics:
+    name: Record FTP connection for Beget support
+    runs-on: ubuntu-24.04
+    timeout-minutes: 2
+    env:
+      FTP_SERVER: ${{ secrets.FTP_SERVER }}
+    steps:
+      - name: Record public IPv4 and timed connection without authentication
+        run: |
+          python3 - <<'PY'
+          import datetime, ipaddress, os, socket, urllib.request
+          try:
+              with urllib.request.urlopen('https://api.ipify.org', timeout=10) as response:
+                  address = str(ipaddress.IPv4Address(response.read(64).decode().strip()))
+              print('RUNNER_PUBLIC_IPV4=' + address, flush=True)
+          except Exception as exc:
+              print('PUBLIC_IP_LOOKUP=' + type(exc).__name__, flush=True)
+          print('FTP_ATTEMPT_UTC=' + datetime.datetime.now(datetime.timezone.utc).isoformat(), flush=True)
+          try:
+              destination = socket.getaddrinfo(os.environ['FTP_SERVER'], 21, socket.AF_INET, socket.SOCK_STREAM)[0][4]
+              with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as connection:
+                  connection.settimeout(12)
+                  connection.connect(destination)
+                  print('FTP_PORT_21=connected', flush=True)
+          except Exception as exc:
+              print('FTP_PORT_21=' + type(exc).__name__, flush=True)
+          print('FTP_FINISHED_UTC=' + datetime.datetime.now(datetime.timezone.utc).isoformat(), flush=True)
+          PY
   deploy:
     runs-on: ubuntu-24.04
     timeout-minutes: 20
