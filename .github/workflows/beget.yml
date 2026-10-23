@@ -35,7 +35,7 @@ jobs:
         with:
           persist-credentials: false
       - name: Check recommendation logic
-        run: node --test tests/recommendation.test.mjs
+        run: node --test tests/*.test.mjs
       - name: Check cabinet PHP syntax and isolation
         env:
           CI_DB_PASSWORD: ci-only-password

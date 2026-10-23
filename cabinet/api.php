@@ -86,15 +86,15 @@ try {
     }
     if ($action==='orders') {
         if ($_SERVER['REQUEST_METHOD']!=='GET') fail('Нужен GET-запрос.',405);
-        $sql='SELECT o.id,o.company,o.title,o.kind,o.released,o.status,o.created_at,o.updated_at,u.name,u.email FROM em_orders o JOIN em_users u ON u.id=o.user_id';
+        $sql='SELECT o.id,o.company,o.title,o.kind,o.released,o.status,o.planned_start,o.due_date,o.work_started_at,o.completed_at,o.created_at,o.updated_at,u.name,u.email FROM em_orders o JOIN em_users u ON u.id=o.user_id';
         $args=[];
         if ($u['role']!=='admin') { $sql.=' WHERE o.user_id=?'; $args[]=$u['id']; }
-        $sql.=' ORDER BY o.updated_at DESC,o.id DESC LIMIT 100';
+        $sql.=$u['role']==='admin'?' ORDER BY o.created_at ASC,o.id ASC':' ORDER BY o.created_at DESC,o.id DESC';
         reply(['orders'=>query($sql,$args)->fetchAll(),'user'=>public_user($u)]);
     }
     if ($action==='files') {
         if ($_SERVER['REQUEST_METHOD']!=='GET') fail('Нужен GET-запрос.',405);
-        $sql='SELECT f.id,f.order_id,f.original_name,f.bytes,f.mime,f.category,f.purpose,f.review_id,f.payment_id,o.released,f.user_id,f.created_at,o.company,o.title FROM em_files f JOIN em_orders o ON o.id=f.order_id';
+        $sql='SELECT f.id,f.order_id,f.original_name,f.bytes,f.mime,f.category,f.asset_type,f.purpose,f.review_id,f.payment_id,o.released,f.user_id,f.created_at,o.company,o.title FROM em_files f JOIN em_orders o ON o.id=f.order_id';
         $args=[];
         if ($u['role']!=='admin') {$sql.=" WHERE o.user_id=? AND (f.purpose<>'review' OR f.review_id IS NOT NULL) AND (f.purpose<>'final' OR o.released=1)";$args[]=$u['id'];}
         reply(['files'=>query($sql.' ORDER BY f.id DESC LIMIT 1000',$args)->fetchAll()]);
@@ -118,7 +118,7 @@ try {
     require __DIR__.'/workflow.php';
     if ($action==='upload-begin') {
         $d=post(); limit('upload-start',400,3600,(string)$u['id']);
-        $filePurpose=purpose($d,$u);
+        $filePurpose=purpose($d,$u);$assetType=asset_type($d);
         $paymentId=filter_var($d['payment']??null,FILTER_VALIDATE_INT)?:null;
         if (in_array($filePurpose,['invoice','qr'],true) && (!$paymentId || !query('SELECT id FROM em_payments WHERE id=? AND order_id=?',[$paymentId,$id])->fetchColumn())) fail('Выберите платёж для счёта или QR-кода.');
         if ($filePurpose==='review' && (int)$o['released']) fail('Проект уже завершён. Для новой работы создайте отдельный проект.');
@@ -138,7 +138,7 @@ try {
             db()->rollBack(); fail('Дождитесь завершения текущей загрузки или освободите место.');
         }
         $token=bin2hex(random_bytes(32));
-        query('INSERT INTO em_uploads (id,order_id,user_id,original_name,category,purpose,payment_id,expected_bytes,created_at) VALUES (?,?,?,?,?,?,?,?,?)',[$token,$id,$u['id'],$name,$category,$filePurpose,$paymentId,$size,time()]);
+        query('INSERT INTO em_uploads (id,order_id,user_id,original_name,category,purpose,asset_type,payment_id,expected_bytes,created_at) VALUES (?,?,?,?,?,?,?,?,?,?)',[$token,$id,$u['id'],$name,$category,$filePurpose,$assetType,$paymentId,$size,time()]);
         db()->commit(); reply(['upload'=>$token,'chunk_bytes'=>2*1024*1024]);
     }
     if ($action==='upload-chunk' || $action==='upload-cancel') {
@@ -174,7 +174,7 @@ try {
         if (!query('SELECT id FROM em_uploads WHERE id=? FOR UPDATE',[$token])->fetchColumn()) {db()->rollBack();fail('Загрузка уже завершена.',409);}
         if (!rename($part,storage().'/'.$token)) throw new RuntimeException('chunk finalize');
         try {
-            query('INSERT INTO em_files (order_id,user_id,original_name,storage_name,bytes,mime,category,purpose,payment_id) VALUES (?,?,?,?,?,?,?,?,?)',[$id,$u['id'],$upload['original_name'],$token,$received,$mime,$upload['category'],$upload['purpose'],$upload['payment_id']]);
+            query('INSERT INTO em_files (order_id,user_id,original_name,storage_name,bytes,mime,category,purpose,asset_type,payment_id) VALUES (?,?,?,?,?,?,?,?,?,?)',[$id,$u['id'],$upload['original_name'],$token,$received,$mime,$upload['category'],$upload['purpose'],$upload['asset_type'],$upload['payment_id']]);
             query('DELETE FROM em_uploads WHERE id=?',[$token]);query('UPDATE em_orders SET updated_at=CURRENT_TIMESTAMP WHERE id=?',[$id]);db()->commit();
         } catch (Throwable $e) { if(db()->inTransaction())db()->rollBack();@rename(storage().'/'.$token,$part);throw $e; }
         reply(['received'=>$received,'complete'=>true]);
@@ -182,9 +182,10 @@ try {
     if ($action==='order') {
         $owner=query('SELECT name,email FROM em_users WHERE id=?',[$o['user_id']])->fetch();
         $o['messages']=query('SELECT m.id,m.body,m.created_at,u.name,u.role FROM em_messages m JOIN em_users u ON u.id=m.user_id WHERE m.order_id=? ORDER BY m.id',[$id])->fetchAll();
-        $files=query('SELECT id,original_name,bytes,mime,category,purpose,review_id,payment_id,user_id,created_at FROM em_files WHERE order_id=? ORDER BY id',[$id])->fetchAll();
+        $files=query('SELECT id,original_name,bytes,mime,category,asset_type,purpose,review_id,payment_id,user_id,created_at FROM em_files WHERE order_id=? ORDER BY id',[$id])->fetchAll();
         $o['files']=array_values(array_filter($files,fn($f)=>visible_file($f,$o,$u)));
         $o['reviews']=query('SELECT * FROM em_reviews WHERE order_id=? ORDER BY id DESC',[$id])->fetchAll();
+        $o['links']=query("SELECT * FROM em_links WHERE order_id=?".($u['role']==='admin'?'':' AND review_id IS NOT NULL').' ORDER BY id',[$id])->fetchAll();
         $o['payments']=query('SELECT * FROM em_payments WHERE order_id=? ORDER BY id DESC',[$id])->fetchAll();
         $latestBrief=query('SELECT id,payload,created_at FROM em_briefs WHERE order_id=? ORDER BY id DESC LIMIT 1',[$id])->fetch();
         $o['detailed_brief']=$latestBrief?['id'=>$latestBrief['id'],'answers'=>json_decode($latestBrief['payload'],true),'created_at'=>$latestBrief['created_at']]:null;
@@ -203,7 +204,7 @@ try {
         $labels+=['payment'=>'Оплата','access'=>'Доступы Яндекса','delivery'=>'Выдача результата'];
         if (!isset($labels[$status])) fail('Некорректный статус.');
         db()->beginTransaction();
-        query('UPDATE em_orders SET status=? WHERE id=?',[$status,$id]);
+        query("UPDATE em_orders SET status=?,work_started_at=CASE WHEN ?='work' THEN COALESCE(work_started_at,CURRENT_TIMESTAMP) ELSE work_started_at END WHERE id=?",[$status,$status,$id]);
         query('INSERT INTO em_messages (order_id,user_id,body) VALUES (?,?,?)',[$id,$u['id'],'Статус проекта: '.$labels[$status]]);
         db()->commit(); reply(['ok'=>true]);
     }

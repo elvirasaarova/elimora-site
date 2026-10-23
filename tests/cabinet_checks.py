@@ -42,7 +42,7 @@ class Client:
         except urllib.error.HTTPError as e:r=e
         if r.headers.get('Set-Cookie'):self.cookie=r.headers['Set-Cookie'].split(';')[0]
         payload=r.read()
-        if r.headers.get_content_type()=='application/octet-stream' or r.headers.get_content_type().startswith('image/'):return r.status,payload
+        if r.headers.get_content_type() in ['application/octet-stream','text/plain'] or r.headers.get_content_type().startswith('image/'):return r.status,payload
         result=json.loads(payload)
         if result.get('csrf'):self.csrf=result['csrf']
         return r.status,result
@@ -95,8 +95,8 @@ def integration():
             def chunk(token,content,offset=0,client=one):
                 body=(f'--{boundary}\r\nContent-Disposition: form-data; name="upload"\r\n\r\n{token}\r\n--{boundary}\r\nContent-Disposition: form-data; name="offset"\r\n\r\n{offset}\r\n--{boundary}\r\nContent-Disposition: form-data; name="chunk"; filename="chunk.bin"\r\nContent-Type: application/octet-stream\r\n\r\n').encode()+content+f'\r\n--{boundary}--\r\n'.encode()
                 return client.request('upload-chunk',extra=suffix,raw=(body,'multipart/form-data; boundary='+boundary))
-            def begin(name,content,category='media',client=one,purpose='material',payment=None):
-                code,result=client.request('upload-begin',{'name':name,'size':len(content),'category':category,'purpose':purpose,'payment':payment},suffix)
+            def begin(name,content,category='media',client=one,purpose='material',payment=None,asset='general'):
+                code,result=client.request('upload-begin',{'name':name,'size':len(content),'category':category,'purpose':purpose,'payment':payment,'asset_type':asset},suffix)
                 assert code==200,result
                 return result['upload']
             assert one.request('upload-begin',{'name':'phone.heic','size':10,'category':'media'},suffix)[0]==400
@@ -136,11 +136,18 @@ def integration():
             assert admin.request('order',extra=suffix)[0]==200
             assert admin.request('status-change',{'status':'work'},suffix)[0]==200
             assert one.request('order',extra=suffix)[1]['order']['status']=='work'
+            started=one.request('order',extra=suffix)[1]['order']['work_started_at'];assert started
+            assert admin.request('status-change',{'status':'materials'},suffix)[0]==200
+            assert admin.request('status-change',{'status':'work'},suffix)[0]==200
+            assert one.request('order',extra=suffix)[1]['order']['work_started_at']==started
             # Paid briefing, versioned approval, invoice/QR and final delivery workflow.
             brief={'products':'Services','goals':'Explain our offer','audience':'Local customers','links':'https://example.test'}
             assert one.request('brief-submit',brief,suffix)[0]==403
             assert one.request('payment-create',{'title':'Deposit','amount_minor':500000},suffix)[0]==403
-            assert admin.request('project-settings',{'kind':'maps','access_note':'Invite studio@example.test'},suffix)[0]==200
+            assert admin.request('project-settings',{'kind':'maps','access_note':'Invite studio@example.test','planned_start':'2026-10-23','due_date':'2026-10-30'},suffix)[0]==200
+            assert one.request('project-settings',{'kind':'maps','planned_start':'2026-10-23','due_date':'2026-10-30'},suffix)[0]==403
+            assert admin.request('project-settings',{'kind':'maps','planned_start':'2026-10-30','due_date':'2026-10-23'},suffix)[0]==400
+            assert one.request('order',extra=suffix)[1]['order']['due_date']=='2026-10-30'
             code,p=admin.request('payment-create',{'title':'Deposit','amount_minor':500000,'note':'Payment by invoice'},suffix)
             assert code==200,p
             payment=p['payment']
@@ -157,13 +164,20 @@ def integration():
             assert one.request('brief-submit',brief,suffix)[0]==200
             assert one.request('order',extra=suffix)[1]['order']['detailed_brief']['answers']['goals']=='Explain our offer'
             assert two.request('payments')[1]['payments']==[]
-            token=begin('preview-v1.png',png,'media',admin,'review')
+            assert b'Explain our offer' in one.request('brief-download',extra=suffix)[1]
+            assert two.request('brief-download',extra=suffix)[0]==404
+            assert one.request('link-add',{'title':'Website','url':'https://example.test','asset_type':'multilink'},suffix)[0]==403
+            assert admin.request('link-add',{'title':'Bad','url':'javascript:alert(1)','asset_type':'multilink'},suffix)[0]==400
+            assert admin.request('link-add',{'title':'Multilink','url':'https://example.test','asset_type':'multilink'},suffix)[0]==200
+            assert one.request('order',extra=suffix)[1]['order']['links']==[]
+            token=begin('preview-v1.png',png,'media',admin,'review',asset='stories')
             assert chunk(token,png,client=admin)[1]['complete'] is True
             assert not [f for f in one.request('order',extra=suffix)[1]['order']['files'] if f['purpose']=='review']
             assert one.request('review-publish',{'note':'Version 1'},suffix)[0]==403
             assert admin.request('review-publish',{'note':'Version 1'},suffix)[0]==200
             o=one.request('order',extra=suffix)[1]['order'];review=o['reviews'][0]['id']
-            review_file=next(f for f in o['files'] if f['purpose']=='review');review_suffix=suffix+'&file='+str(review_file['id'])
+            assert len(o['links'])==1 and o['links'][0]['review_id']
+            review_file=next(f for f in o['files'] if f['purpose']=='review');assert review_file['asset_type']=='stories';review_suffix=suffix+'&file='+str(review_file['id'])
             assert one.request('download',extra=review_suffix)[0]==403
             assert one.request('preview',extra=review_suffix)==(200,png)
             assert one.request('review-answer',{'review':review,'decision':'changes','feedback':''},suffix)[0]==400
@@ -204,9 +218,9 @@ def integration():
             other=dict(order);other['title']='Repeat design project';other['answers']={'tasks':['visual']}
             code,new=one.request('create',other);assert code==200
             assert len(one.request('orders')[1]['orders'])==2
+            listed=admin.request('orders')[1]['orders'];assert [int(o['id']) for o in listed]==sorted(int(o['id']) for o in listed)
             suffix='&id='+str(new['id'])
-            token=begin('creative.png',png,'media',admin,'review')
-            assert chunk(token,png,client=admin)[1]['complete'] is True
+            assert admin.request('link-add',{'title':'Creative preview','url':'https://example.test/preview','asset_type':'website'},suffix)[0]==200
             assert admin.request('review-publish',{'note':'Creative'},suffix)[0]==200
             review=one.request('order',extra=suffix)[1]['order']['reviews'][0]['id']
             assert one.request('review-answer',{'review':review,'decision':'approved'},suffix)[0]==200
@@ -216,7 +230,7 @@ def integration():
             assert one.request('download',extra=file_suffix)[0]==404
             assert one.request('logout',{})[0]==200
             assert one.request('orders')[0]==401
-            print('Passed: payment-gated briefing, invoice and QR, versioned changes/approval, access handoff, guarded final release, private notifications, repeat project history; 8-character passwords, required company, 30-photo batch, chunk offsets and ownership, MIME validation, Word/Excel/brand files, private previews; installation lock, login, registration, CSRF, client isolation, admin access, messages, upload/download/delete, logout')
+            print('Passed: FIFO client queue, scheduling validation and role isolation, preserved work-start clock, grouped review asset types, private draft links and link-only approvals, brief export; payment-gated briefing, invoice and QR, versioned changes/approval, access handoff, guarded final release, private notifications, repeat project history; 8-character passwords, required company, 30-photo batch, chunk offsets and ownership, MIME validation, Word/Excel/brand files, private previews; installation lock, login, registration, CSRF, client isolation, admin access, messages, upload/download/delete, logout')
         finally:server.terminate();server.wait(timeout=10)
 
 

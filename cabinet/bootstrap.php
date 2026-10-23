@@ -106,7 +106,7 @@ function storage(): string {
     return $dir;
 }
 function migrate(): void {
-    if (query("SELECT value FROM em_settings WHERE name='schema_version'")->fetchColumn()==='4') return;
+    if (query("SELECT value FROM em_settings WHERE name='schema_version'")->fetchColumn()==='5') return;
     $lock='elimora-schema-'.substr(hash('sha256',config()['db_name']),0,20);
     if ((int)query('SELECT GET_LOCK(?,10)',[$lock])->fetchColumn()!==1) throw new RuntimeException('schema lock');
     try {
@@ -134,7 +134,14 @@ function migrate(): void {
         if (!in_array('payment_id',$columns,true)) db()->exec('ALTER TABLE em_files ADD payment_id BIGINT UNSIGNED NULL');
         $columns=query('SHOW COLUMNS FROM em_uploads')->fetchAll(PDO::FETCH_COLUMN);
         if (!in_array('payment_id',$columns,true)) db()->exec('ALTER TABLE em_uploads ADD payment_id BIGINT UNSIGNED NULL');
-        query("INSERT INTO em_settings (name,value) VALUES ('schema_version','4') ON DUPLICATE KEY UPDATE value='4'");
+        $columns=query('SHOW COLUMNS FROM em_orders')->fetchAll(PDO::FETCH_COLUMN);
+        foreach (['planned_start'=>'DATE NULL','due_date'=>'DATE NULL','work_started_at'=>'TIMESTAMP NULL','completed_at'=>'TIMESTAMP NULL'] as $name=>$type) if (!in_array($name,$columns,true)) db()->exec("ALTER TABLE em_orders ADD $name $type");
+        foreach (['em_files','em_uploads'] as $table) {
+            $columns=query("SHOW COLUMNS FROM $table")->fetchAll(PDO::FETCH_COLUMN);
+            if (!in_array('asset_type',$columns,true)) db()->exec("ALTER TABLE $table ADD asset_type VARCHAR(30) NOT NULL DEFAULT 'general'");
+        }
+        db()->exec("CREATE TABLE IF NOT EXISTS em_links (id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY, order_id BIGINT UNSIGNED NOT NULL, asset_type VARCHAR(30) NOT NULL, title VARCHAR(200) NOT NULL, url TEXT NOT NULL, review_id BIGINT UNSIGNED NULL, created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP, INDEX(order_id)) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4");
+        query("INSERT INTO em_settings (name,value) VALUES ('schema_version','5') ON DUPLICATE KEY UPDATE value='5'");
     } finally { query('SELECT RELEASE_LOCK(?)',[$lock]); }
 }
 function file_category(string $category): string {
@@ -203,4 +210,17 @@ function notify_project(array $o,string $body,bool $toAdmin=false): void {
 }
 function visible_file(array $f,array $o,array $u): bool {
     return $u['role']==='admin' || ($f['purpose']==='final'?(bool)$o['released']:($f['purpose']!=='review' || !empty($f['review_id'])));
+}
+
+function asset_type(array $d): string {
+    $v=$d['asset_type']??'general';
+    if (!in_array($v,['general','stories','showcase','publications','qr-layout','multilink','creative','logo','website','final'],true)) fail('Некорректный тип работы.');
+    return $v;
+}
+function project_date(array $d,string $key): ?string {
+    $v=field($d,$key,10,false);
+    if ($v==='')return null;
+    $date=DateTimeImmutable::createFromFormat('!Y-m-d',$v);
+    if (!$date || $date->format('Y-m-d')!==$v)fail('Проверьте дату.');
+    return $v;
 }

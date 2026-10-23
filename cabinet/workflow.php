@@ -1,11 +1,33 @@
 <?php
 declare(strict_types=1);
 if (!defined('ELIMORA_API')) {http_response_code(404);exit;}
+if ($action==='brief-download') {
+    $brief=query('SELECT payload,created_at FROM em_briefs WHERE order_id=? ORDER BY id DESC LIMIT 1',[$id])->fetch();
+    if(!$brief)fail('Бриф ещё не отправлен.',404);
+    $fields=['products'=>'Услуги и товары','goals'=>'Задачи проекта','audience'=>'Аудитория','messages'=>'Что рассказать клиентам','brand'=>'Стиль','links'=>'Ссылки','references'=>'Примеры','constraints'=>'Требования','deadline'=>'Сроки и контакт'];
+    $answers=json_decode($brief['payload'],true);$lines=['Бриф: '.$o['company'],'Проект №'.$id.': '.$o['title'],'Отправлен: '.$brief['created_at']];
+    foreach($fields as $key=>$label)$lines[]= "\n".$label."\n".($answers[$key]??'');
+    header('Content-Type: text/plain; charset=utf-8');header('Content-Disposition: attachment; filename="brief-'.$id.'.txt"');echo implode("\n",$lines);exit;
+}
 // Included only after authentication and ownership checks in api.php.
-if (in_array($action,['project-settings','review-publish','review-answer','payment-create','payment-update','release','access-report','brief-submit'],true)) {
+if (in_array($action,['project-settings','review-publish','review-answer','payment-create','payment-update','release','access-report','brief-submit','link-add','link-delete'],true)) {
     $d=post();
     $admin=$u['role']==='admin';
     if (!in_array($action,['review-answer','access-report','brief-submit'],true) && $action!=='payment-update' && !$admin) fail('Доступ запрещён.',403);
+    if ($action==='link-add') {
+        $url=field($d,'url',2000);$title=field($d,'title',200);$type=asset_type($d);
+        if(!filter_var($url,FILTER_VALIDATE_URL)||strtolower((string)parse_url($url,PHP_URL_SCHEME))!=='https'||parse_url($url,PHP_URL_USER)||parse_url($url,PHP_URL_PASS))fail('Укажите публичную ссылку https:// без логина и пароля.');
+        if($o['status']==='done')fail('Проект завершён.');
+        if((int)query('SELECT COUNT(*) FROM em_links WHERE order_id=?',[$id])->fetchColumn()>=100)fail('Не больше 100 ссылок на проект.');
+        query('INSERT INTO em_links (order_id,asset_type,title,url) VALUES (?,?,?,?)',[$id,$type,$title,$url]);reply(['ok'=>true]);
+    }
+    if ($action==='link-delete') {
+        $link=filter_var($d['link']??null,FILTER_VALIDATE_INT);
+        $row=query('SELECT * FROM em_links WHERE id=? AND order_id=?',[$link,$id])->fetch();
+        if(!$row)fail('Ссылка не найдена.',404);
+        if($row['review_id'])fail('Ссылка опубликованной версии остаётся в истории.',409);
+        query('DELETE FROM em_links WHERE id=?',[$link]);reply(['ok'=>true]);
+    }
     if ($action==='brief-submit') {
         if ($admin) fail('Бриф заполняет клиент.',403);
         if (!query("SELECT id FROM em_payments WHERE order_id=? AND status='paid'",[$id])->fetchColumn()) fail('Подробный бриф откроется после подтверждения первого платежа.',403);
@@ -21,7 +43,9 @@ if (in_array($action,['project-settings','review-publish','review-answer','payme
     if ($action==='project-settings') {
         $kind=field($d,'kind',20);if(!in_array($kind,['design','maps','website','combined'],true))fail('Выберите тип проекта.');
         $note=field($d,'access_note',3000,false);
-        query('UPDATE em_orders SET kind=?,access_note=? WHERE id=?',[$kind,$note,$id]);reply(['ok'=>true]);
+        $start=array_key_exists('planned_start',$d)?project_date($d,'planned_start'):$o['planned_start'];$due=array_key_exists('due_date',$d)?project_date($d,'due_date'):$o['due_date'];
+        if($start&&$due&&$due<$start)fail('Дата завершения должна быть не раньше старта.');
+        query('UPDATE em_orders SET kind=?,access_note=?,planned_start=?,due_date=? WHERE id=?',[$kind,$note,$start,$due,$id]);reply(['ok'=>true]);
     }
     if ($action==='review-publish') {
         $note=field($d,'note',6000,false);
@@ -29,9 +53,11 @@ if (in_array($action,['project-settings','review-publish','review-answer','payme
         if($fresh['status']==='done'){db()->rollBack();fail('Проект уже завершён.');}
         if (query("SELECT id FROM em_reviews WHERE order_id=? AND state='pending'",[$id])->fetchColumn()) {db()->rollBack();fail('Сначала дождитесь решения по текущей версии.');}
         $files=query("SELECT id FROM em_files WHERE order_id=? AND purpose='review' AND review_id IS NULL FOR UPDATE",[$id])->fetchAll(PDO::FETCH_COLUMN);
-        if (!$files) {db()->rollBack();fail('Сначала добавьте файлы новой версии.');}
+        $links=query('SELECT id FROM em_links WHERE order_id=? AND review_id IS NULL FOR UPDATE',[$id])->fetchAll(PDO::FETCH_COLUMN);
+        if (!$files && !$links) {db()->rollBack();fail('Сначала добавьте файлы новой версии.');}
         query('INSERT INTO em_reviews (order_id,note) VALUES (?,?)',[$id,$note]);$review=(int)db()->lastInsertId();
         query("UPDATE em_files SET review_id=? WHERE order_id=? AND purpose='review' AND review_id IS NULL",[$review,$id]);
+        query('UPDATE em_links SET review_id=? WHERE order_id=? AND review_id IS NULL',[$review,$id]);
         query("UPDATE em_orders SET status='review',released=0,access_reported=0 WHERE id=?",[$id]);
         query('INSERT INTO em_messages (order_id,user_id,body) VALUES (?,?,?)',[$id,$u['id'],'Отправлена версия на согласование. '.$note]);
         db()->commit();notify_project($o,'Новые материалы на согласовании.');reply(['ok'=>true]);
@@ -80,7 +106,7 @@ if (in_array($action,['project-settings','review-publish','review-answer','payme
         if($r!=='approved'){db()->rollBack();fail('Сначала клиент должен согласовать последнюю версию.');}
         if(query("SELECT id FROM em_payments WHERE order_id=? AND status IN ('pending','reported')",[$id])->fetchColumn()){db()->rollBack();fail('Сначала подтвердите поступление всех платежей или отмените ненужные счета.');}
         if(in_array($fresh['kind'],['maps','combined'],true) && $fresh['status']!=='delivery'){db()->rollBack();fail('Сначала проверьте доступ, завершите размещение и переведите проект на этап выдачи.');}
-        query("UPDATE em_orders SET released=1,status='done' WHERE id=?",[$id]);
+        query("UPDATE em_orders SET released=1,status='done',completed_at=COALESCE(completed_at,CURRENT_TIMESTAMP) WHERE id=?",[$id]);
         query('INSERT INTO em_messages (order_id,user_id,body) VALUES (?,?,?)',[$id,$u['id'],'Проект завершён. Финальные материалы доступны для скачивания.']);
         db()->commit();notify_project($o,'Проект завершён: можно скачать материалы.');reply(['ok'=>true]);
     }
