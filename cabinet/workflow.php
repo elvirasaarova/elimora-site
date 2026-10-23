@@ -44,6 +44,7 @@ if (in_array($action,['project-settings','review-publish','review-answer','payme
         $kind=field($d,'kind',20);if(!in_array($kind,['design','maps','website','combined'],true))fail('Выберите тип проекта.');
         $note=field($d,'access_note',3000,false);
         $start=array_key_exists('planned_start',$d)?project_date($d,'planned_start'):$o['planned_start'];$due=array_key_exists('due_date',$d)?project_date($d,'due_date'):$o['due_date'];
+        if($start&&!$due)$due=work_window($start,5)[4];
         if($start&&$due&&$due<$start)fail('Дата завершения должна быть не раньше старта.');
         query('UPDATE em_orders SET kind=?,access_note=?,planned_start=?,due_date=? WHERE id=?',[$kind,$note,$start,$due,$id]);reply(['ok'=>true]);
     }

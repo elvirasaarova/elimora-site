@@ -21,7 +21,7 @@ ROOT=Path(__file__).resolve().parents[1]
 def check_allowlist():
     import runpy
     public=runpy.run_path(str(ROOT/'scripts/deploy_beget.py'))['public_file']
-    for n in ['index.html','cabinet/api.php','cabinet/bootstrap.php','cabinet/workflow.php','cabinet/schema.sql','cabinet/.htaccess','assets/portrait.webp']:
+    for n in ['index.html','cabinet/api.php','cabinet/bootstrap.php','cabinet/workflow.php','cabinet/availability.php','cabinet/schema.sql','cabinet/.htaccess','assets/portrait.webp']:
         assert public(n),n
     for n in ['.env','elimora-config.php','scripts/elimora-config.example.php','cabinet/config.php','cabinet/uploads/private.pdf','uploads/a.pdf','../a.json','/a.json','.git/config']:
         assert not public(n),n
@@ -228,9 +228,30 @@ def integration():
             assert admin.request('release',{},suffix)[0]==200
             assert one.request('delete-file',{},file_suffix)[0]==200
             assert one.request('download',extra=file_suffix)[0]==404
+            # Attach a ready bank invoice: the payment is created only after file storage succeeds.
+            code,third=one.request('create',other);assert code==200;suffix='&id='+str(third['id'])
+            token=begin('bank-invoice.pdf',pdf,'documents',admin,'invoice')
+            assert chunk(token,pdf,client=admin)[1]['complete'] is True
+            o=one.request('order',extra=suffix)[1]['order'];assert len(o['payments'])==1
+            invoice=o['payments'][0];assert int(invoice['amount_minor'])==0
+            assert o['status']=='payment' and int(o['files'][0]['payment_id'])==int(invoice['id'])
+            assert one.request('payment-update',{'payment':invoice['id'],'status':'reported'},suffix)[0]==200
+            assert admin.request('payment-update',{'payment':invoice['id'],'status':'paid'},suffix)[0]==200
+            assert one.request('brief-submit',brief,suffix)[0]==200
+            assert admin.request('project-settings',{'kind':'design','planned_start':'2026-10-26','due_date':''},suffix)[0]==200
+            assert one.request('order',extra=suffix)[1]['order']['due_date']=='2026-10-30'
+            public_client=Client(url);code,forecast=public_client.request('availability')
+            assert code==200 and forecast['capacity']==3 and forecast['duration_workdays']==5
+            assert forecast['reserved_projects']==1
+            assert set(forecast)=={'capacity','duration_workdays','active_projects','reserved_projects','start','finish','calendar','timezone','weekdays'}
+            assert 'example.test' not in json.dumps(forecast)
+            token=begin('bad-invoice.pdf',b'not a PDF','documents',admin,'invoice')
+            assert chunk(token,b'not a PDF',client=admin)[0]==400
+            assert admin.request('upload-cancel',{'upload':token},suffix)[0]==200
+            assert len(one.request('order',extra=suffix)[1]['order']['payments'])==1
             assert one.request('logout',{})[0]==200
             assert one.request('orders')[0]==401
-            print('Passed: FIFO client queue, scheduling validation and role isolation, preserved work-start clock, grouped review asset types, private draft links and link-only approvals, brief export; payment-gated briefing, invoice and QR, versioned changes/approval, access handoff, guarded final release, private notifications, repeat project history; 8-character passwords, required company, 30-photo batch, chunk offsets and ownership, MIME validation, Word/Excel/brand files, private previews; installation lock, login, registration, CSRF, client isolation, admin access, messages, upload/download/delete, logout')
+            print('Passed: ready bank invoice attachment without amount re-entry, failed uploads create no payments, public anonymous availability excludes unpaid/finished projects, five-workday planning; FIFO client queue, scheduling validation and role isolation, preserved work-start clock, grouped review asset types, private draft links and link-only approvals, brief export; payment-gated briefing, invoice and QR, versioned changes/approval, access handoff, guarded final release, private notifications, repeat project history; 8-character passwords, required company, 30-photo batch, chunk offsets and ownership, MIME validation, Word/Excel/brand files, private previews; installation lock, login, registration, CSRF, client isolation, admin access, messages, upload/download/delete, logout')
         finally:server.terminate();server.wait(timeout=10)
 
 

@@ -2,6 +2,7 @@
 declare(strict_types=1);
 define('ELIMORA_API',true);
 require __DIR__.'/bootstrap.php';
+require_once __DIR__.'/availability.php';
 try {
     $action=$_GET['action']??'status';
     if (!is_string($action)) fail('Некорректное действие.');
@@ -73,6 +74,12 @@ try {
         query('DELETE FROM em_resets WHERE user_id=?',[$r['user_id']]); db()->commit(); $_SESSION=[];
         reply(['ok'=>true]);
     }
+    if ($action==='availability') {
+        if($_SERVER['REQUEST_METHOD']!=='GET')fail('Нужен GET-запрос.',405);
+        $projects=query("SELECT o.status,o.planned_start,o.due_date,o.work_started_at FROM em_orders o WHERE o.status<>'done' AND (o.work_started_at IS NOT NULL OR o.status IN ('work','review','access','delivery') OR EXISTS(SELECT 1 FROM em_payments p WHERE p.order_id=o.id AND p.status='paid')) ORDER BY o.created_at,o.id")->fetchAll();
+        $today=(new DateTimeImmutable('now',new DateTimeZone('Asia/Saigon')))->format('Y-m-d');
+        reply(work_forecast($projects,$today));
+    }
     $u=user();
     if ($action==='logout') { post(); $_SESSION=[]; session_regenerate_id(true); reply(['ok'=>true]); }
     if ($action==='notifications') {
@@ -120,7 +127,8 @@ try {
         $d=post(); limit('upload-start',400,3600,(string)$u['id']);
         $filePurpose=purpose($d,$u);$assetType=asset_type($d);
         $paymentId=filter_var($d['payment']??null,FILTER_VALIDATE_INT)?:null;
-        if (in_array($filePurpose,['invoice','qr'],true) && (!$paymentId || !query('SELECT id FROM em_payments WHERE id=? AND order_id=?',[$paymentId,$id])->fetchColumn())) fail('Выберите платёж для счёта или QR-кода.');
+        if (($filePurpose==='qr' && !$paymentId) || ($paymentId && !query('SELECT id FROM em_payments WHERE id=? AND order_id=?',[$paymentId,$id])->fetchColumn())) fail('Выберите платёж для счёта или QR-кода.');
+        if($filePurpose==='invoice'&&!$paymentId&&$o['status']==='done')fail('Для новой работы создайте новый проект.');
         if ($filePurpose==='review' && (int)$o['released']) fail('Проект уже завершён. Для новой работы создайте отдельный проект.');
         $name=file_name(field($d,'name',200)); $category=file_category(field($d,'category',20));
         $size=filter_var($d['size']??null,FILTER_VALIDATE_INT,['options'=>['min_range'=>1,'max_range'=>150*1024*1024]]);
@@ -172,11 +180,19 @@ try {
         db()->beginTransaction();file_budget((int)$u['id'],$id,$received);
         // Row lock and exact ownership prevent double finalization of a temporary upload.
         if (!query('SELECT id FROM em_uploads WHERE id=? FOR UPDATE',[$token])->fetchColumn()) {db()->rollBack();fail('Загрузка уже завершена.',409);}
+        $invoiceCreated=false;$paymentId=$upload['payment_id'];
+        if($upload['purpose']==='invoice'&&!$paymentId){
+            $fresh=project($id,$u);if($fresh['status']==='done'){db()->rollBack();fail('Проект уже завершён.');}
+            query('INSERT INTO em_payments (order_id,title,amount_minor,note) VALUES (?,?,0,?)',[$id,$upload['original_name'],'Сумма и реквизиты указаны в прикреплённом счёте.']);
+            $paymentId=(int)db()->lastInsertId();$invoiceCreated=true;
+            if($fresh['status']==='new')query("UPDATE em_orders SET status='payment' WHERE id=?",[$id]);
+        }
         if (!rename($part,storage().'/'.$token)) throw new RuntimeException('chunk finalize');
         try {
-            query('INSERT INTO em_files (order_id,user_id,original_name,storage_name,bytes,mime,category,purpose,asset_type,payment_id) VALUES (?,?,?,?,?,?,?,?,?,?)',[$id,$u['id'],$upload['original_name'],$token,$received,$mime,$upload['category'],$upload['purpose'],$upload['asset_type'],$upload['payment_id']]);
+            query('INSERT INTO em_files (order_id,user_id,original_name,storage_name,bytes,mime,category,purpose,asset_type,payment_id) VALUES (?,?,?,?,?,?,?,?,?,?)',[$id,$u['id'],$upload['original_name'],$token,$received,$mime,$upload['category'],$upload['purpose'],$upload['asset_type'],$paymentId]);
             query('DELETE FROM em_uploads WHERE id=?',[$token]);query('UPDATE em_orders SET updated_at=CURRENT_TIMESTAMP WHERE id=?',[$id]);db()->commit();
         } catch (Throwable $e) { if(db()->inTransaction())db()->rollBack();@rename(storage().'/'.$token,$part);throw $e; }
+        if($invoiceCreated)notify_project($o,'Добавлен счёт на оплату.');
         reply(['received'=>$received,'complete'=>true]);
     }
     if ($action==='order') {

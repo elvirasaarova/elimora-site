@@ -41,6 +41,7 @@ jobs:
           CI_DB_PASSWORD: ci-only-password
         run: |
           find cabinet -name '*.php' -print0 | xargs -0 -n1 php -l
+          php tests/availability_checks.php
           python3 tests/cabinet_checks.py
       - name: Upload website over explicit FTPS
         env:
