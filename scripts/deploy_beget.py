@@ -30,7 +30,7 @@ def public_file(name):
     p = PurePosixPath(name)
     if p.is_absolute() or '..' in p.parts:
         return False
-    if name in {'.htaccess', '.nojekyll'}:
+    if name in {'.htaccess', '.nojekyll', 'favicon.ico'}:
         return True
     if name == 'cabinet/.htaccess':
         return True
