@@ -39,8 +39,11 @@ def deploy():
         raise RuntimeError('Required website files missing; upload cancelled')
     # Certificate and hostname verification are mandatory. Never fall back to plain FTP.
     with ftplib.FTP_TLS(context=ssl.create_default_context(), timeout=60) as ftp:
+        print('Connecting to FTPS server', flush=True)
         ftp.connect(values['FTP_SERVER'], 21)
+        print('Authenticating over TLS', flush=True)
         ftp.login(values['FTP_USERNAME'], values['FTP_PASSWORD'])
+        print('Authentication successful; protecting data connection', flush=True)
         ftp.prot_p()
         ftp.cwd('/')  # This account is restricted to elimora.ru/public_html.
         old_buffer = io.BytesIO()
@@ -88,6 +91,10 @@ if __name__ == '__main__':
     try:
         deploy()
     except Exception as exc:
-        # Avoid printing credentials or server responses that could contain them.
-        print(f'Deployment failed ({type(exc).__name__}). Check FTPS access, certificate and repository secrets.', file=sys.stderr)
+        message = str(exc)
+        for key in ('FTP_PASSWORD', 'FTP_USERNAME', 'FTP_SERVER'):
+            value = os.environ.get(key)
+            if value:
+                message = message.replace(value, '[redacted]')
+        print(f'Deployment failed ({type(exc).__name__}): {message}', file=sys.stderr)
         sys.exit(1)
