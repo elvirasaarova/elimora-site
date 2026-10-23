@@ -243,7 +243,10 @@ def integration():
             public_client=Client(url);code,forecast=public_client.request('availability')
             assert code==200 and forecast['capacity']==3 and forecast['duration_workdays']==5
             assert forecast['reserved_projects']==1
-            assert set(forecast)=={'capacity','duration_workdays','active_projects','reserved_projects','start','finish','calendar','timezone','weekdays'}
+            assert set(forecast)=={'capacity','duration_workdays','active_projects','reserved_projects','start','finish','calendar','available_starts','timezone','weekdays'}
+            assert len(forecast['calendar'])==40
+            assert all(set(option)=={'start','finish'} for option in forecast['available_starts'])
+            assert all(set(day)=={'date','occupied','free'} for day in forecast['calendar'])
             assert 'example.test' not in json.dumps(forecast)
             token=begin('bad-invoice.pdf',b'not a PDF','documents',admin,'invoice')
             assert chunk(token,b'not a PDF',client=admin)[0]==400
