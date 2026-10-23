@@ -45,7 +45,12 @@ function work_forecast(array $projects,string $today): array {
     };
     // Projects arrive from SQL in original request order. Unpaid requests do not reserve capacity.
     foreach($unplanned as $p){$window=$find();if(!$window)break;$reserve($window[0],$window[$duration-1]);}
-    $window=$find();$calendar=[];
-    foreach(work_window($earliest,10) as $date)$calendar[]=['date'=>$date,'occupied'=>min($capacity,$busy[$date]??0),'free'=>max(0,$capacity-($busy[$date]??0))];
-    return ['capacity'=>$capacity,'duration_workdays'=>$duration,'active_projects'=>$active,'reserved_projects'=>count($projects),'start'=>$window[0]??null,'finish'=>$window[$duration-1]??null,'calendar'=>$calendar,'timezone'=>'Asia/Saigon','weekdays'=>'Monday-Friday'];
+    $window=$find();$calendar=[];$availableStarts=[];
+    foreach(work_window($earliest,40) as $date)$calendar[]=['date'=>$date,'occupied'=>min($capacity,$busy[$date]??0),'free'=>max(0,$capacity-($busy[$date]??0))];
+    foreach(work_window($earliest,35) as $candidate){
+        $days=work_window($candidate,$duration);$fits=true;
+        foreach($days as $date)if(($busy[$date]??0)>=$capacity){$fits=false;break;}
+        if($fits)$availableStarts[]=['start'=>$days[0],'finish'=>$days[$duration-1]];
+    }
+    return ['capacity'=>$capacity,'duration_workdays'=>$duration,'active_projects'=>$active,'reserved_projects'=>count($projects),'start'=>$window[0]??null,'finish'=>$window[$duration-1]??null,'calendar'=>$calendar,'available_starts'=>$availableStarts,'timezone'=>'Asia/Saigon','weekdays'=>'Monday-Friday'];
 }

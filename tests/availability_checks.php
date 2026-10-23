@@ -20,3 +20,12 @@ check($full['capacity']===3&&$full['duration_workdays']===5,'capacity and durati
 foreach($full['calendar'] as $day)check($day['free']>=0&&$day['occupied']<=3,'public slot bounds');
 check(!array_key_exists('projects',$full),'no client records exposed');
 echo "Passed: three production slots, five workdays, weekends, planned dates, FIFO backlog, overdue reservations and public aggregation\n";
+
+check(count($empty['calendar'])===40,'calendar covers several weeks');
+check(count($empty['available_starts'])===35,'free starts are selectable');
+check($full['available_starts'][0]['start']==='2026-11-02','full week cannot be selected');
+foreach($full['available_starts'] as $option) {
+    $window=work_window($option['start']);
+    check(end($window)===$option['finish'],'selection finish uses five workdays');
+    foreach($window as $date)check($date>'2026-10-30','selected work window avoids full capacity');
+}

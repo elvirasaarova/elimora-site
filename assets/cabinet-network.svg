@@ -1,0 +1,9 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1800" height="1100" viewBox="0 0 1800 1100" fill="none">
+<g stroke="#9464bd" stroke-width="1" opacity=".25">
+<path d="M-80 100 80 180 220 60 330 240 140 350 -40 280M80 180 140 350 275 470 85 590 -60 500M220 60 400 100 330 240 275 470 420 630 245 790 80 720 85 590M-40 280 140 350 85 590 80 720 -40 900M245 790 130 1030 -60 950M420 630 470 890 245 790"/>
+<path d="m1510-40 105 160 170-25 110 150-170 130-120-110-120 180 80 150 200 30 160-150M1615 120l-10 145 120 110 70 220-210 95-105-95-120 180 90 170 205-75 140 155M1585 690l-35 260-120 180M1765 870l70-275"/>
+</g>
+<g stroke="#9867c3" opacity=".16"><ellipse cx="1710" cy="195" rx="270" ry="125" transform="rotate(-28 1710 195)"/><ellipse cx="1710" cy="195" rx="270" ry="95" transform="rotate(-28 1710 195)"/><ellipse cx="1710" cy="195" rx="270" ry="65" transform="rotate(-28 1710 195)"/><ellipse cx="1710" cy="195" rx="270" ry="32" transform="rotate(-28 1710 195)"/><path d="M1470 320c85-210 280-300 480-250M1450 270c140-220 340-250 500-160M1480 170c200-150 330-160 450-15"/></g>
+<g fill="#9660c1" opacity=".45"><circle cx="80" cy="180" r="3"/><circle cx="220" cy="60" r="3"/><circle cx="330" cy="240" r="3"/><circle cx="140" cy="350" r="4"/><circle cx="85" cy="590" r="3"/><circle cx="275" cy="470" r="3"/><circle cx="80" cy="720" r="3"/><circle cx="245" cy="790" r="4"/><circle cx="420" cy="630" r="3"/><circle cx="1615" cy="120" r="3"/><circle cx="1605" cy="265" r="4"/><circle cx="1725" cy="375" r="3"/><circle cx="1565" cy="595" r="3"/><circle cx="1585" cy="690" r="4"/><circle cx="1460" cy="775" r="3"/><circle cx="1550" cy="950" r="3"/></g>
+<g fill="#afd12f" opacity=".7"><circle cx="330" cy="240" r="5"/><circle cx="130" cy="1030" r="4"/><circle cx="1725" cy="375" r="5"/><circle cx="1460" cy="775" r="5"/></g>
+</svg>
