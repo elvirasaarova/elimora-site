@@ -75,7 +75,7 @@ function email(array $d): string {
 }
 function password(array $d): string {
     $v=$d['password']??'';
-    if (!is_string($v) || strlen($v)<12 || strlen($v)>72) fail('Пароль: от 12 до 72 байт. Используйте длинную фразу.');
+    if (!is_string($v) || preg_match_all('/./us',$v)<8 || strlen($v)>72) fail('Пароль: минимум 8 символов, до 72 байт.');
     return $v;
 }
 function user(): array {
@@ -104,6 +104,66 @@ function storage(): string {
     $dir=dirname(__DIR__,2).'/elimora-storage';
     if (!is_dir($dir) && !mkdir($dir,0700,true) && !is_dir($dir)) throw new RuntimeException('storage');
     return $dir;
+}
+function migrate(): void {
+    if (query("SELECT value FROM em_settings WHERE name='schema_version'")->fetchColumn()==='2') return;
+    $lock='elimora-schema-'.substr(hash('sha256',config()['db_name']),0,20);
+    if ((int)query('SELECT GET_LOCK(?,10)',[$lock])->fetchColumn()!==1) throw new RuntimeException('schema lock');
+    try {
+        $columns=query('SHOW COLUMNS FROM em_orders')->fetchAll(PDO::FETCH_COLUMN);
+        if (!in_array('company',$columns,true)) db()->exec("ALTER TABLE em_orders ADD company VARCHAR(200) NOT NULL DEFAULT ''");
+        $columns=query('SHOW COLUMNS FROM em_files')->fetchAll(PDO::FETCH_COLUMN);
+        if (!in_array('category',$columns,true)) {
+            db()->exec("ALTER TABLE em_files ADD category VARCHAR(20) NOT NULL DEFAULT 'documents'");
+            db()->exec("UPDATE em_files SET category='media' WHERE mime LIKE 'image/%'");
+        }
+        db()->exec("CREATE TABLE IF NOT EXISTS em_uploads (id CHAR(64) PRIMARY KEY, order_id BIGINT UNSIGNED NOT NULL, user_id BIGINT UNSIGNED NOT NULL, original_name VARCHAR(200) NOT NULL, category VARCHAR(20) NOT NULL, expected_bytes BIGINT NOT NULL, received_bytes BIGINT NOT NULL DEFAULT 0, created_at BIGINT NOT NULL, INDEX(user_id), INDEX(created_at)) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4");
+        query("INSERT INTO em_settings (name,value) VALUES ('schema_version','2') ON DUPLICATE KEY UPDATE value='2'");
+    } finally { query('SELECT RELEASE_LOCK(?)',[$lock]); }
+}
+function file_category(string $category): string {
+    if (!in_array($category,['media','brand','documents'],true)) fail('Выберите раздел для материалов.');
+    return $category;
+}
+function file_name(string $original): string {
+    if (!preg_match('//u',$original) || strlen($original)>200 || $original==='') fail('Имя файла должно быть короче 200 байт.');
+    return preg_replace('/[\x00-\x1f\x7f\\\\\/]/','_',$original);
+}
+function file_mime(string $path,string $name,string $category): string {
+    $mime=(new finfo(FILEINFO_MIME_TYPE))->file($path);
+    $ext=strtolower(pathinfo($name,PATHINFO_EXTENSION));
+    $allowed=['media'=>['jpg','jpeg','png','mp4','mov'],
+        'brand'=>['jpg','jpeg','png','webp','svg','pdf','zip'],
+        'documents'=>['pdf','doc','docx','xls','xlsx','csv','txt']];
+    if (!in_array($ext,$allowed[$category]??[],true)) fail($category==='media'?'Фото — только PNG/JPEG. HEIC нужно предварительно преобразовать. Видео — MP4/MOV.':'Этот формат не подходит для выбранного раздела.');
+    $types=['jpg'=>['image/jpeg'],'jpeg'=>['image/jpeg'],'png'=>['image/png'],'webp'=>['image/webp'],
+        'pdf'=>['application/pdf'],'mp4'=>['video/mp4','application/mp4'],'mov'=>['video/quicktime','video/mp4'],
+        'txt'=>['text/plain'],'csv'=>['text/plain','text/csv','application/csv'],
+        'svg'=>['image/svg+xml','text/xml','application/xml','text/plain'],
+        'zip'=>['application/zip','application/x-zip-compressed'],
+        'doc'=>['application/msword','application/CDFV2','application/x-ole-storage'],
+        'xls'=>['application/vnd.ms-excel','application/CDFV2','application/x-ole-storage'],
+        'docx'=>['application/vnd.openxmlformats-officedocument.wordprocessingml.document','application/zip'],
+        'xlsx'=>['application/vnd.openxmlformats-officedocument.spreadsheetml.sheet','application/zip']];
+    if (!in_array($mime,$types[$ext]??[],true)) fail('Содержимое файла не соответствует расширению. Проверьте формат файла.');
+    if (in_array($ext,['docx','xlsx'],true)) {
+        $zip=new ZipArchive();
+        if ($zip->open($path)!==true) fail('Не удалось прочитать документ Office.');
+        $valid=$zip->locateName('[Content_Types].xml')!==false && $zip->locateName($ext==='docx'?'word/document.xml':'xl/workbook.xml')!==false;
+        // Inspect entries only. Never unpack an uploaded archive.
+        $zip->close();
+        if (!$valid) fail('Некорректный документ Word или Excel.');
+    }
+    if ($ext==='svg' && !str_contains(strtolower(file_get_contents($path,false,null,0,65536)),'<svg')) fail('Некорректный SVG.');
+    return $mime;
+}
+function file_budget(int $userId,int $orderId,int $size): void {
+    query('SELECT id FROM em_users WHERE id=? FOR UPDATE',[$userId]);
+    query('SELECT id FROM em_orders WHERE id=? FOR UPDATE',[$orderId]);
+    if ((int)query('SELECT COUNT(*) FROM em_files WHERE order_id=?',[$orderId])->fetchColumn()>=300 ||
+        (int)query('SELECT COALESCE(SUM(bytes),0) FROM em_files WHERE user_id=?',[$userId])->fetchColumn()+$size>1024*1024*1024) {
+        db()->rollBack(); fail('Лимит материалов достигнут: 300 файлов на проект или 1 ГБ на аккаунт. Можно передать ссылку на подборку.');
+    }
 }
 function notify_admin(int $id): void {
     $c=config(); $to=$c['admin_email']??'';

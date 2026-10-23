@@ -2,6 +2,8 @@
 import base64
 import http.cookiejar
 import json
+import io
+import zipfile
 import os
 from pathlib import Path
 import shutil
@@ -40,7 +42,7 @@ class Client:
         except urllib.error.HTTPError as e:r=e
         if r.headers.get('Set-Cookie'):self.cookie=r.headers['Set-Cookie'].split(';')[0]
         payload=r.read()
-        if r.headers.get_content_type()=='application/octet-stream':return r.status,payload
+        if r.headers.get_content_type()=='application/octet-stream' or r.headers.get_content_type().startswith('image/'):return r.status,payload
         result=json.loads(payload)
         if result.get('csrf'):self.csrf=result['csrf']
         return r.status,result
@@ -69,10 +71,13 @@ def integration():
             one=Client(url);two=Client(url)
             for client,name,mail in [(one,'One','one@example.test'),(two,'Two','two@example.test')]:
                 client.request('status')
-                status,s=client.request('register',{'name':name,'email':mail,'password':'long-client-password','consent':True})
+                status,s=client.request('register',{'name':name,'email':mail,'password':'eight888','consent':True})
                 assert status==200 and s['user']['role']=='client'
-            order={'title':'Test project','brief':'Answers and recommendation','answers':{'tasks':['maps']},'consent':True}
+            assert two.request('register',{'name':'Short','email':'short@example.test','password':'seven77','consent':True})[0]==400
+            order={'company':'Company One','title':'Test project','brief':'Answers and recommendation','answers':{'tasks':['maps']},'consent':True}
             assert one.request('create',order,csrf=False)[0]==403
+            missing=dict(order);missing.pop('company')
+            assert one.request('create',missing)[0]==400
             status,r=one.request('create',order);assert status==200;r_id=r['id'];suffix='&id='+str(r_id)
             assert two.request('order',extra=suffix)[0]==404
             assert two.request('message',{'body':'Intrusion'},suffix)[0]==404
@@ -85,6 +90,46 @@ def integration():
             fid=r['order']['files'][0]['id'];file_suffix=suffix+'&file='+str(fid)
             assert two.request('download',extra=file_suffix)[0]==404
             assert one.request('download',extra=file_suffix)==(200,b'Private client material')
+            # A complete 30-photo batch, uploaded in chunks and categorized.
+            png=base64.b64decode('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+a7i0AAAAASUVORK5CYII=')
+            def chunk(token,content,offset=0,client=one):
+                body=(f'--{boundary}\r\nContent-Disposition: form-data; name="upload"\r\n\r\n{token}\r\n--{boundary}\r\nContent-Disposition: form-data; name="offset"\r\n\r\n{offset}\r\n--{boundary}\r\nContent-Disposition: form-data; name="chunk"; filename="chunk.bin"\r\nContent-Type: application/octet-stream\r\n\r\n').encode()+content+f'\r\n--{boundary}--\r\n'.encode()
+                return client.request('upload-chunk',extra=suffix,raw=(body,'multipart/form-data; boundary='+boundary))
+            def begin(name,content,category='media'):
+                code,result=one.request('upload-begin',{'name':name,'size':len(content),'category':category},suffix)
+                assert code==200,result
+                return result['upload']
+            assert one.request('upload-begin',{'name':'phone.heic','size':10,'category':'media'},suffix)[0]==400
+            token=begin('photo-0.png',png)
+            assert chunk(token,png,client=two)[0]==404
+            assert chunk(token,png,offset=1)[0]==400
+            assert chunk(token,png[:20])[1]['complete'] is False
+            assert chunk(token,png[20:],20)[1]['complete'] is True
+            assert chunk(token,png)[0]==404
+            for i in range(1,30):
+                token=begin(f'photo-{i}.png',png)
+                assert chunk(token,png)[1]['complete'] is True
+            files=one.request('files')[1]['files']
+            assert len([f for f in files if f['category']=='media'])==30
+            assert two.request('files')[1]['files']==[]
+            photo=next(f for f in files if f['category']=='media')
+            preview=suffix+'&file='+str(photo['id'])
+            assert one.request('preview',extra=preview)==(200,png)
+            assert two.request('preview',extra=preview)[0]==404
+            assert one.request('preview',extra=file_suffix)[0]==415
+            for ext,entry in [('docx','word/document.xml'),('xlsx','xl/workbook.xml')]:
+                stream=io.BytesIO()
+                with zipfile.ZipFile(stream,'w') as archive:
+                    archive.writestr('[Content_Types].xml','<Types/>')
+                    archive.writestr(entry,'<document/>')
+                content=stream.getvalue();token=begin('price.'+ext,content,'documents')
+                assert chunk(token,content)[1]['complete'] is True
+            token=begin('logo.svg',b'<svg xmlns="http://www.w3.org/2000/svg"></svg>','brand')
+            assert chunk(token,b'<svg xmlns="http://www.w3.org/2000/svg"></svg>')[1]['complete'] is True
+            token=begin('fake.png',b'not an image')
+            assert chunk(token,b'not an image')[0]==400
+            assert one.request('upload-cancel',{'upload':token},suffix)[0]==200
+            assert one.request('order',extra=suffix)[1]['order']['company']=='Company One'
             admin.request('status')
             assert admin.request('login',{'email':'admin@example.test','password':'long-admin-password'})[0]==200
             assert len(admin.request('orders')[1]['orders'])==1
@@ -95,7 +140,7 @@ def integration():
             assert one.request('download',extra=file_suffix)[0]==404
             assert one.request('logout',{})[0]==200
             assert one.request('orders')[0]==401
-            print('Passed: installation lock, login, registration, CSRF, client isolation, admin access, messages, upload/download/delete, logout')
+            print('Passed: 8-character passwords, required company, 30-photo batch, chunk offsets and ownership, MIME validation, Word/Excel/brand files, private previews; installation lock, login, registration, CSRF, client isolation, admin access, messages, upload/download/delete, logout')
         finally:server.terminate();server.wait(timeout=10)
 
 

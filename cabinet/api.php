@@ -9,6 +9,7 @@ try {
         $exists=is_file(dirname(__DIR__,2).'/elimora-config.php');
         if (!$exists) reply(['ready'=>false,'csrf'=>$_SESSION['csrf']]);
         $ready=installed();
+        if ($ready) migrate();
         $u=null;
         if ($ready && !empty($_SESSION['uid'])) $u=public_user(user());
         reply(['ready'=>$ready,'csrf'=>$_SESSION['csrf'],'user'=>$u]);
@@ -29,6 +30,7 @@ try {
         reply(['ok'=>true]);
     }
     if (!installed()) fail('Кабинет ещё настраивается.',503);
+    migrate();
     if ($action==='register') {
         $d=post(); limit('register',5,3600);
         $name=field($d,'name',120); $mail=email($d); $pass=password($d);
@@ -75,15 +77,22 @@ try {
     if ($action==='logout') { post(); $_SESSION=[]; session_regenerate_id(true); reply(['ok'=>true]); }
     if ($action==='orders') {
         if ($_SERVER['REQUEST_METHOD']!=='GET') fail('Нужен GET-запрос.',405);
-        $sql='SELECT o.id,o.title,o.status,o.created_at,o.updated_at,u.name,u.email FROM em_orders o JOIN em_users u ON u.id=o.user_id';
+        $sql='SELECT o.id,o.company,o.title,o.status,o.created_at,o.updated_at,u.name,u.email FROM em_orders o JOIN em_users u ON u.id=o.user_id';
         $args=[];
         if ($u['role']!=='admin') { $sql.=' WHERE o.user_id=?'; $args[]=$u['id']; }
         $sql.=' ORDER BY o.updated_at DESC,o.id DESC LIMIT 100';
         reply(['orders'=>query($sql,$args)->fetchAll(),'user'=>public_user($u)]);
     }
+    if ($action==='files') {
+        if ($_SERVER['REQUEST_METHOD']!=='GET') fail('Нужен GET-запрос.',405);
+        $sql='SELECT f.id,f.order_id,f.original_name,f.bytes,f.mime,f.category,f.user_id,f.created_at,o.company,o.title FROM em_files f JOIN em_orders o ON o.id=f.order_id';
+        $args=[];
+        if ($u['role']!=='admin') {$sql.=' WHERE o.user_id=?';$args[]=$u['id'];}
+        reply(['files'=>query($sql.' ORDER BY f.id DESC LIMIT 1000',$args)->fetchAll()]);
+    }
     if ($action==='create') {
         $d=post(); limit('create',15,3600,(string)$u['id']);
-        $title=field($d,'title',200); $brief=field($d,'brief',24000);
+        $company=field($d,'company',200); $title=field($d,'title',200); $brief=field($d,'brief',24000);
         if (($d['consent']??false)!==true) fail('Подтвердите передачу информации для обработки заявки.');
         $draft=$d['answers']??[];
         if (!is_array($draft)) fail('Некорректные ответы анкеты.');
@@ -91,16 +100,73 @@ try {
         if (strlen($encoded)>16000) fail('Слишком много данных анкеты.');
         // Store questionnaire answers as a proposal, never as a confirmed price or invoice.
         $proposal=json_encode(['answers'=>$draft,'consent'=>'privacy-2026-10','consent_at'=>gmdate('c')],JSON_UNESCAPED_UNICODE|JSON_THROW_ON_ERROR);
-        query('INSERT INTO em_orders (user_id,title,brief,proposal) VALUES (?,?,?,?)',[$u['id'],$title,$brief,$proposal]);
+        query('INSERT INTO em_orders (user_id,company,title,brief,proposal) VALUES (?,?,?,?,?)',[$u['id'],$company,$title,$brief,$proposal]);
         $id=(int)db()->lastInsertId(); notify_admin($id); reply(['id'=>$id]);
     }
     $id=filter_var($_GET['id']??null,FILTER_VALIDATE_INT,['options'=>['min_range'=>1]]);
     if (!$id) fail('Некорректный номер заявки.');
     $o=project($id,$u);
+    if ($action==='upload-begin') {
+        $d=post(); limit('upload-start',400,3600,(string)$u['id']);
+        $name=file_name(field($d,'name',200)); $category=file_category(field($d,'category',20));
+        $size=filter_var($d['size']??null,FILTER_VALIDATE_INT,['options'=>['min_range'=>1,'max_range'=>150*1024*1024]]);
+        if (!$size) fail('Один файл — не больше 150 МБ.');
+        $allowed=['media'=>['png','jpg','jpeg','mp4','mov'],'brand'=>['png','jpg','jpeg','webp','svg','pdf','zip'],'documents'=>['pdf','doc','docx','xls','xlsx','csv','txt']];
+        if (!in_array(strtolower(pathinfo($name,PATHINFO_EXTENSION)),$allowed[$category],true)) fail('Проверьте формат файла. Фото — PNG/JPEG, видео — MP4/MOV.');
+        foreach (query('SELECT id FROM em_uploads WHERE created_at<? LIMIT 100',[time()-86400])->fetchAll(PDO::FETCH_COLUMN) as $expired) {
+            if (preg_match('/^[a-f0-9]{64}$/',$expired)) @unlink(storage().'/'.$expired.'.part');
+            query('DELETE FROM em_uploads WHERE id=?',[$expired]);
+        }
+        db()->beginTransaction(); file_budget((int)$u['id'],$id,$size);
+        $reserved=(int)query('SELECT COALESCE(SUM(expected_bytes),0) FROM em_uploads WHERE user_id=?',[$u['id']])->fetchColumn();
+        $used=(int)query('SELECT COALESCE(SUM(bytes),0) FROM em_files WHERE user_id=?',[$u['id']])->fetchColumn();
+        if ($reserved+$used+$size>1024*1024*1024 || (int)query('SELECT COUNT(*) FROM em_uploads WHERE user_id=?',[$u['id']])->fetchColumn()>=30) {
+            db()->rollBack(); fail('Дождитесь завершения текущей загрузки или освободите место.');
+        }
+        $token=bin2hex(random_bytes(32));
+        query('INSERT INTO em_uploads (id,order_id,user_id,original_name,category,expected_bytes,created_at) VALUES (?,?,?,?,?,?,?)',[$token,$id,$u['id'],$name,$category,$size,time()]);
+        db()->commit(); reply(['upload'=>$token,'chunk_bytes'=>2*1024*1024]);
+    }
+    if ($action==='upload-chunk' || $action==='upload-cancel') {
+        $d=post(); $token=field($d,'upload',64);
+        if (!preg_match('/^[a-f0-9]{64}$/',$token)) fail('Неверная загрузка.');
+        db()->beginTransaction();
+        $upload=query('SELECT * FROM em_uploads WHERE id=? AND user_id=? AND order_id=? FOR UPDATE',[$token,$u['id'],$id])->fetch();
+        if (!$upload) { db()->rollBack(); fail('Загрузка не найдена. Выберите файл снова.',404); }
+        $part=storage().'/'.$token.'.part';
+        if ($action==='upload-cancel') {
+            @unlink($part); query('DELETE FROM em_uploads WHERE id=?',[$token]);db()->commit();reply(['ok'=>true]);
+        }
+        $chunk=$_FILES['chunk']??null; $offset=filter_var($d['offset']??null,FILTER_VALIDATE_INT,['options'=>['min_range'=>0]]);
+        if (!$chunk || is_array($chunk['error']) || $chunk['error']!==UPLOAD_ERR_OK || $offset===false || $offset!==(int)$upload['received_bytes']) {
+            db()->rollBack(); fail('Фрагмент не загрузился. Выберите файл снова.');
+        }
+        $length=filesize($chunk['tmp_name']);
+        if ($length<1 || $length>2*1024*1024 || $offset+$length>(int)$upload['expected_bytes'] || (is_file($part)?filesize($part):0)!==$offset) {
+            db()->rollBack(); fail('Неверный размер фрагмента.');
+        }
+        $target=fopen($part,'ab');$source=fopen($chunk['tmp_name'],'rb');
+        if (!$target || !$source) throw new RuntimeException('chunk open');
+        chmod($part,0600);$written=stream_copy_to_stream($source,$target);fclose($source);fclose($target);
+        if ($written!==$length) throw new RuntimeException('chunk write');
+        $received=$offset+$length;
+        query('UPDATE em_uploads SET received_bytes=? WHERE id=?',[$received,$token]);db()->commit();
+        if ($received<(int)$upload['expected_bytes']) reply(['received'=>$received,'complete'=>false]);
+        $mime=file_mime($part,$upload['original_name'],$upload['category']);
+        db()->beginTransaction();file_budget((int)$u['id'],$id,$received);
+        // Row lock and exact ownership prevent double finalization of a temporary upload.
+        if (!query('SELECT id FROM em_uploads WHERE id=? FOR UPDATE',[$token])->fetchColumn()) {db()->rollBack();fail('Загрузка уже завершена.',409);}
+        if (!rename($part,storage().'/'.$token)) throw new RuntimeException('chunk finalize');
+        try {
+            query('INSERT INTO em_files (order_id,user_id,original_name,storage_name,bytes,mime,category) VALUES (?,?,?,?,?,?,?)',[$id,$u['id'],$upload['original_name'],$token,$received,$mime,$upload['category']]);
+            query('DELETE FROM em_uploads WHERE id=?',[$token]);query('UPDATE em_orders SET updated_at=CURRENT_TIMESTAMP WHERE id=?',[$id]);db()->commit();
+        } catch (Throwable $e) { if(db()->inTransaction())db()->rollBack();@rename(storage().'/'.$token,$part);throw $e; }
+        reply(['received'=>$received,'complete'=>true]);
+    }
     if ($action==='order') {
         $owner=query('SELECT name,email FROM em_users WHERE id=?',[$o['user_id']])->fetch();
         $o['messages']=query('SELECT m.id,m.body,m.created_at,u.name,u.role FROM em_messages m JOIN em_users u ON u.id=m.user_id WHERE m.order_id=? ORDER BY m.id',[$id])->fetchAll();
-        $o['files']=query('SELECT id,original_name,bytes,user_id,created_at FROM em_files WHERE order_id=? ORDER BY id',[$id])->fetchAll();
+        $o['files']=query('SELECT id,original_name,bytes,mime,category,user_id,created_at FROM em_files WHERE order_id=? ORDER BY id',[$id])->fetchAll();
         $o['owner']=$owner; $o['proposal']=json_decode($o['proposal'],true); reply(['order'=>$o]);
     }
     if ($action==='message') {
@@ -119,35 +185,26 @@ try {
         db()->commit(); reply(['ok'=>true]);
     }
     if ($action==='upload') {
-        post(); limit('upload',60,3600,(string)$u['id']);
+        $d=post(); limit('upload',400,3600,(string)$u['id']);
         $f=$_FILES['file']??null;
         if (!$f || !is_array($f) || is_array($f['error']) || $f['error']!==UPLOAD_ERR_OK) fail('Файл не загрузился. Максимальный размер — 15 МБ.');
         $size=filesize($f['tmp_name']);
         if ($size<1 || $size>15*1024*1024) fail('Файл должен быть от 1 байта до 15 МБ.');
-        $mime=(new finfo(FILEINFO_MIME_TYPE))->file($f['tmp_name']);
-        $types=['image/jpeg'=>['jpg','jpeg'],'image/png'=>['png'],'image/webp'=>['webp'],'application/pdf'=>['pdf'],'text/plain'=>['txt']];
-        $extension=strtolower(pathinfo($f['name'],PATHINFO_EXTENSION));
-        if (!in_array($extension,$types[$mime]??[],true)) fail('Подойдут JPG, PNG, WEBP, PDF или TXT. Остальные форматы можно передать ссылкой в сообщении.');
-        $original=(string)$f['name'];
-        if (!preg_match('//u',$original) || strlen($original)>200) fail('Укоротите имя файла до 200 байт.');
-        $name=preg_replace('/[\x00-\x1f\x7f\\\\\/]/','_',$original);
+        $name=file_name((string)$f['name']);
+        $category=file_category((string)($d['category']??'documents'));
+        $mime=file_mime($f['tmp_name'],$name,$category);
         $storageName=bin2hex(random_bytes(32)); $path=storage().'/'.$storageName;
         db()->beginTransaction();
-        query('SELECT id FROM em_users WHERE id=? FOR UPDATE',[$u['id']]);
-        query('SELECT id FROM em_orders WHERE id=? FOR UPDATE',[$id]);
-        if ((int)query('SELECT COUNT(*) FROM em_files WHERE order_id=?',[$id])->fetchColumn()>=30 ||
-            (int)query('SELECT COALESCE(SUM(bytes),0) FROM em_files WHERE user_id=?',[$u['id']])->fetchColumn()+$size>500*1024*1024) {
-            db()->rollBack(); fail('Лимит материалов достигнут. Отправьте ссылку на папку с файлами.');
-        }
+        file_budget((int)$u['id'],$id,$size);
         if (!move_uploaded_file($f['tmp_name'],$path)) { db()->rollBack(); throw new RuntimeException('upload move'); }
         chmod($path,0600);
         try {
-            query('INSERT INTO em_files (order_id,user_id,original_name,storage_name,bytes,mime) VALUES (?,?,?,?,?,?)',[$id,$u['id'],$name,$storageName,$size,$mime]);
+            query('INSERT INTO em_files (order_id,user_id,original_name,storage_name,bytes,mime,category) VALUES (?,?,?,?,?,?,?)',[$id,$u['id'],$name,$storageName,$size,$mime,$category]);
             query('UPDATE em_orders SET updated_at=CURRENT_TIMESTAMP WHERE id=?',[$id]); db()->commit();
         } catch (Throwable $e) { if (db()->inTransaction()) db()->rollBack(); @unlink($path); throw $e; }
         reply(['ok'=>true]);
     }
-    if ($action==='download' || $action==='delete-file') {
+    if ($action==='download' || $action==='preview' || $action==='delete-file') {
         $fid=filter_var($_GET['file']??null,FILTER_VALIDATE_INT,['options'=>['min_range'=>1]]);
         $f=query('SELECT * FROM em_files WHERE id=? AND order_id=?',[$fid?:0,$id])->fetch();
         if (!$f || !preg_match('/^[a-f0-9]{64}$/',$f['storage_name'])) fail('Файл не найден.',404);
@@ -158,7 +215,13 @@ try {
             query('DELETE FROM em_files WHERE id=?',[$fid]); reply(['ok'=>true]);
         }
         if (!is_file($path)) fail('Файл не найден.',404);
-        session_write_close(); header('Content-Type: application/octet-stream'); header('Content-Length: '.filesize($path));
+        session_write_close();
+        if ($action==='preview') {
+            if (!in_array($f['mime'],['image/jpeg','image/png','image/webp'],true)) fail('Предпросмотр недоступен.',415);
+            header('Content-Length: '.filesize($path));header('Content-Type: '.$f['mime']);header('Content-Disposition: inline');readfile($path);exit;
+        }
+        header('Content-Length: '.filesize($path));
+        header('Content-Type: application/octet-stream');
         header("Content-Disposition: attachment; filename=\"material\"; filename*=UTF-8''".rawurlencode($f['original_name']));
         readfile($path); exit;
     }
