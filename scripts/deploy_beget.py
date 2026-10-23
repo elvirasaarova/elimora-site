@@ -8,6 +8,7 @@ from pathlib import Path, PurePosixPath
 import ssl
 import subprocess
 import sys
+import time
 
 ROOT = Path(__file__).resolve().parents[1]
 MANIFEST = '.elimora-deploy-manifest.json'
@@ -103,7 +104,16 @@ def deploy():
 
 if __name__ == '__main__':
     try:
-        deploy()
+        for attempt in range(3):
+            try:
+                deploy()
+                break
+            except (TimeoutError, ConnectionError, ftplib.error_temp, ssl.SSLEOFError):
+                if attempt == 2:
+                    raise
+                # Retry transient transport failures only. Credentials and TLS verification stay unchanged.
+                print('Temporary FTPS connection failure; reconnecting shortly.', flush=True)
+                time.sleep(5)
     except Exception as exc:
         message = str(exc)
         for key in ('FTP_PASSWORD', 'FTP_USERNAME', 'FTP_SERVER'):
