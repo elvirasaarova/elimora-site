@@ -32,7 +32,11 @@
  .hero-baseline p br{display:none}
  .hero-baseline p br:after{content:' '}
  .hero-baseline p .mobile-word-gap{display:inline}
- .home-main h2,.quiz-intro h2,.quiz-heading,.world-preview h2{font-size:var(--mobile-heading);line-height:1.12;letter-spacing:-.045em}
+ .home-main h2,.quiz-intro h2,.quiz-heading,.world-preview h2,.page-main h1.page-title,.page-main h2{font-size:var(--mobile-heading);line-height:1.12;letter-spacing:-.045em}
+ .page-main .page-title{margin:24px 0;text-wrap:balance}
+ .page-main .page-title em,.page-main h2 em{font-size:1em}
+ .page-main .article-card{padding-inline:18px}
+ .page-main .article-card .article-cover{margin-inline:-18px}
  .home-main h2 em{font-size:1em;line-height:inherit}
  .home-main .material-lab,.home-main .process-lab{padding-top:55px}
  .project-studio{padding:42px 5vw 48px}

@@ -37,9 +37,9 @@ if(header){
 }
 const wordArt=document.querySelector('.letter-world');
 if(wordArt){
- const mobile=document.createElementNS(svgNS,'svg');mobile.classList.add('letter-world','letter-world-mobile');mobile.setAttribute('viewBox','0 20 780 650');mobile.setAttribute('role','img');mobile.setAttribute('aria-label','ELIMORA');
+ const mobile=document.createElementNS(svgNS,'svg');mobile.classList.add('letter-world','letter-world-mobile');mobile.setAttribute('viewBox','0 20 780 695');mobile.setAttribute('role','img');mobile.setAttribute('aria-label','ELIMORA');
  const defs=wordArt.querySelector('defs').cloneNode(true);defs.querySelectorAll('[id]').forEach(el=>el.id='mobile-'+el.id);mobile.append(defs);
- const outlines=[...wordArt.querySelector('g[aria-hidden]').children],positions=[[0,-25],[-10,10],[-20,-35],[-30,-5],[-656,260],[-619,230],[-582,270]];
+ const outlines=[...wordArt.querySelector('g[aria-hidden]').children],positions=[[0,-25],[-10,10],[-20,-35],[-30,-5],[-656,305],[-619,275],[-582,315]];
  wordArt.querySelectorAll('.hero-letter').forEach((letter,index)=>{
   const group=document.createElementNS(svgNS,'g');group.setAttribute('transform',`translate(${positions[index].join(' ')})`);
   const art=letter.cloneNode(true);art.removeAttribute('class');art.removeAttribute('style');art.setAttribute('clip-path',`url(#mobile-letter${index})`);
