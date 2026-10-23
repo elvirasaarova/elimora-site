@@ -12,3 +12,27 @@ test('client materials and creator deliverables are kept separate',()=>{const ht
 
 test('administrator sidebar stays in the selected client project',async()=>{const opened=await render('admin',`(async()=>{selected=7;globalThis.opened=null;openOrder=async(id,tab)=>{globalThis.opened={id,tab}};dashboard=async()=>{throw Error('Unexpected global navigation')};await navigateCabinet('documents');return opened})()`);assert.equal(opened.id,7);assert.equal(opened.tab,'documents');const payment=await render('admin',`(async()=>{selected=7;globalThis.opened=null;openOrder=async(id,tab)=>{globalThis.opened={id,tab}};await navigateCabinet('payment');return opened})()`);assert.equal(payment.id,7);assert.equal(payment.tab,'payment');assert.equal(render('admin',"selected=7;viewTitle('projects')"),'Проект');assert.equal(render('admin',"selected=null;viewTitle('projects')"),'Клиенты');});
 test('before selecting a client the administrator can open the global queue',async()=>{const result=await render('admin',`(async()=>{selected=null;globalThis.target=null;dashboard=async key=>{globalThis.target=key};await navigateCabinet('projects');return target})()`);assert.equal(result,'projects');const table=render('admin',"orders=[{id:7,company:'Cafe',name:'Anna',email:'a@example.test',title:'Maps',status:'new',created_at:'2026-10-23 08:00:00',updated_at:'2026-10-23 08:00:00'}];adminQueue();root.innerHTML");assert(table.includes('Очередь'));assert(table.includes('data-order="7"'));assert(!table.includes('Выбрать клиента'));});
+
+test('project sections highlight the sidebar without a second tab bar',async()=>{
+ for(const role of ['admin','client']){
+  for(const tab of ['project','files','brief','review','payment','documents']){
+   const html=await render(role,`(async()=>{
+    order.created_at='2026-10-23 08:00:00';order.title='Maps';order.messages=[];
+    api=async action=>action==='order'?{order}:action==='orders'?{orders:[order]}:{};
+    loadNotifications=async()=>{};bindToolbar=()=>{};bindOrders=()=>{};bindForm=()=>{};bindDeletes=()=>{};
+    await openOrder(7,'${tab}');
+    return root.innerHTML;
+   })()`);
+   const nav=html.split('<nav aria-label="Разделы кабинета">')[1].split('</nav>')[0];
+   const active=[...nav.matchAll(/<button data-view="([^"]+)" aria-current="page"/g)].map(m=>m[1]);
+   assert.deepEqual(active,[tab==='project'?'projects':tab],role+': '+tab);
+   assert(nav.includes('data-view="brief"'),'brief remains reachable');
+   assert(!html.includes('class="project-tabs"'));
+   assert(html.includes('id="back-queue"'),'project list remains reachable');
+  }
+ }
+});
+test('client sidebar sections stay scoped to the selected project',async()=>{
+ const result=await render('client',`(async()=>{openOrder=async(id,tab)=>({id,tab});dashboard=async()=>{throw Error('Unexpected global navigation')};return navigateCabinet('brief')})()`);
+ assert.equal(result.id,7);assert.equal(result.tab,'brief');
+});
