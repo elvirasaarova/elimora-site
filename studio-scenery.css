@@ -61,3 +61,46 @@
 .scene-home-world{left:0;top:160px}
 }
 @media(prefers-reduced-motion:reduce){.studio-object{animation:none}}
+/* The drawing grows out of the page edge; its inner edge dissolves before the text. */
+.studio-object{width:clamp(800px,68vw,1280px);opacity:.17;animation:none;--scene-shift:0;--scene-angle:0deg;-webkit-mask-image:var(--scene-mask,linear-gradient(90deg,transparent 4%,#000 65%));mask-image:var(--scene-mask,linear-gradient(90deg,transparent 4%,#000 65%))}
+.scene-websites{right:-19vw;top:0;--scene-angle:-8deg}
+.scene-maps{left:-23vw;top:220px;--scene-angle:7deg}
+.scene-profiles{background-image:url("assets/scenes/profiles.svg?v=3");right:-17vw;top:35px;width:clamp(900px,74vw,1400px);opacity:.22;--scene-angle:5deg}
+.scene-about{left:-23vw;bottom:-270px;width:clamp(850px,73vw,1300px);opacity:.12;--scene-angle:-14deg}
+.scene-logos{right:-23vw;top:-90px;--scene-angle:12deg}
+.scene-visual{left:-21vw;top:270px;opacity:.15}
+.scene-services{right:-21vw;top:-80px;--scene-angle:-9deg}
+.scene-contacts{right:-20vw;bottom:-190px;--scene-angle:8deg}
+.scene-account{right:-24vw;top:20px;opacity:.14}
+.scene-useful{left:auto;right:-20vw;top:-90px;--scene-angle:12deg}
+.scene-creative-formats{right:auto;left:-23vw;top:260px;--scene-angle:-8deg}
+.scene-privacy{right:-23vw;top:210px;opacity:.12}
+.scene-terms{left:-23vw;bottom:-140px;opacity:.12}
+.scene-cafe{right:-21vw;top:50px;--scene-angle:-12deg}
+.scene-jasmine{left:-23vw;top:310px;opacity:.14}
+.scene-kids{right:-22vw;top:-100px;--scene-angle:10deg}
+.scene-maps-before-ads{right:-22vw;top:150px;opacity:.15}
+.scene-profile-content{left:-23vw;bottom:-150px;--scene-angle:8deg;opacity:.14}
+.scene-website-before-ads{right:-22vw;top:210px;opacity:.14}
+.scene-home{right:-23vw;top:-130px;opacity:.17;--scene-angle:8deg}
+.scene-home-plan{left:-26vw;top:80px;--scene-angle:-12deg;opacity:.13}
+.scene-home-visual{right:-23vw;top:40px;--scene-angle:9deg;opacity:.16}
+.scene-home-formats{left:-22vw;top:120px;opacity:.14}
+.scene-home-chat{right:-23vw;top:-60px;--scene-angle:-8deg;opacity:.15}
+.scene-home-world{left:-23vw;top:-50px;opacity:.14}
+.scene-maps,.scene-about,.scene-visual,.scene-creative-formats,.scene-terms,.scene-jasmine,.scene-profile-content,.scene-home-plan,.scene-home-formats,.scene-home-world{--scene-mask:linear-gradient(90deg,#000 15%,transparent 88%)}
+@media(max-width:1000px) and (min-width:701px){.studio-object{width:850px;opacity:.13}.scene-about{bottom:-220px}}
+@media(max-width:700px){
+.studio-object{width:720px;opacity:.11;right:-420px;left:auto;top:100px;bottom:auto;--scene-mask:linear-gradient(90deg,transparent 12%,#000 80%)}
+.scene-maps,.scene-visual,.scene-jasmine,.scene-creative-formats,.scene-home-plan,.scene-home-formats,.scene-home-world{left:-420px;right:auto;--scene-mask:linear-gradient(90deg,#000 15%,transparent 88%)}
+.scene-profiles{right:-370px;top:90px;width:780px;opacity:.15}
+.scene-about{left:-390px;right:auto;top:auto;bottom:-160px;width:780px;opacity:.09;--scene-mask:linear-gradient(90deg,#000 15%,transparent 85%)}
+.scene-useful{top:-30px;right:-430px}
+.scene-contacts{top:auto;bottom:-130px}
+.scene-privacy,.scene-website-before-ads,.scene-maps-before-ads{top:400px}
+.scene-terms,.scene-profile-content{left:-420px;right:auto;top:auto;bottom:-150px;--scene-mask:linear-gradient(90deg,#000 15%,transparent 88%)}
+.scene-home{top:170px;opacity:.09}
+.scene-home-visual{top:300px}
+.scene-home-chat{top:160px}
+}
+
