@@ -18,8 +18,5 @@
 .project-picker{padding:18px 22px;border:1px solid #a778d74d;border-radius:20px;background:#f9f5ffb3;margin:22px 0}.project-picker label{margin:0;font-size:16px}.project-picker .form-error:empty{display:none}.project-picker .cabinet-help{margin-bottom:0}.project-top{scroll-margin-top:110px}
 .cabinet-sidebar-title small{display:block;margin-top:8px;font:13px/1.4 Arial,sans-serif;color:#7b648b}
 
-/* Quiet network artwork frames both client and administrator workspaces. */
-body.cabinet-body{position:relative;isolation:isolate}
-body.cabinet-body::before{content:"";position:fixed;inset:0;z-index:-1;pointer-events:none;background:url("assets/cabinet-network.svg?v=1") center top/100% auto no-repeat;opacity:.9}
+/* Cabinet backgrounds use shared subject illustrations. */
 body.cabinet-body .cabinet-sidebar{backdrop-filter:blur(12px)}
-@media(max-width:700px){body.cabinet-body::before{background-size:auto 100%;background-position:left top;opacity:.55}}

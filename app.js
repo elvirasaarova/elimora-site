@@ -1,4 +1,4 @@
-import {loadAvailability,withPreferredStart} from './availability.js?v=2';
+import {loadAvailability,withPreferredStart} from './availability.js?v=3';
 import {PACKAGES,SECTORS,recommend} from './recommendation.mjs?v=2';
 const root=document.getElementById('quiz-content');
 const money=n=>new Intl.NumberFormat('ru-RU').format(n)+' ₽';

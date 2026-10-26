@@ -4,7 +4,7 @@
 .availability-card h3{font:700 clamp(25px,3vw,34px)/1.14 Arial,sans-serif;letter-spacing:-.045em;margin:10px 0 12px}
 .availability-card h3 em{font:italic 1.06em Georgia,serif;color:#7934bd}
 .availability-card .booking-heading p{font:15px/1.6 Arial,sans-serif;margin:0;color:#6b5776;max-width:520px}
-.booking-capacity{flex-shrink:0;padding:10px 15px;border:1px solid #bba2d8;border-radius:24px;background:#fff9;font:13px/1.4 Arial,sans-serif;white-space:nowrap}
+
 .booking-layout{display:grid;grid-template-columns:minmax(0,1.35fr) minmax(235px,.75fr);gap:24px;align-items:start}
 .booking-month{background:#fff9;border:1px solid #e1d3ee;padding:22px;border-radius:24px;min-width:0}
 .booking-month-bar{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:22px}
@@ -34,6 +34,6 @@
 .booking-duration{display:block;border-left:1px solid #b68bd4;padding:16px 0 16px 14px;margin:12px 0;color:#d2f985;font:12px/1.4 Arial,sans-serif}
 .booking-selection p{font:14px/1.5 Arial,sans-serif;margin:22px 0 0;color:#fff}
 .booking-selection .small{font:12px/1.6 Arial,sans-serif!important;color:#dfd0e9!important;margin-top:12px}
-@media(max-width:700px){.booking-layout{grid-template-columns:1fr;gap:16px}.availability-card .booking-heading{display:block}.booking-capacity{display:inline-block;margin-top:15px}.booking-month{padding:16px}.booking-selection{padding:22px}.booking-selection strong{font-size:27px}.booking-month-bar h4{font-size:18px}.availability-card .booking-day{min-height:54px;border-radius:10px;padding:8px 0}.booking-day strong{font-size:17px}.booking-day small{font-size:8px}.booking-weekdays,.booking-days{gap:4px}.booking-legend{gap:10px;font-size:10px}.availability-card{margin:24px 0;border-radius:24px;padding:16px}.booking-selection .small{font-size:12px!important}}
+@media(max-width:700px){.booking-layout{grid-template-columns:1fr;gap:16px}.availability-card .booking-heading{display:block}.booking-month{padding:16px}.booking-selection{padding:22px}.booking-selection strong{font-size:27px}.booking-month-bar h4{font-size:18px}.availability-card .booking-day{min-height:54px;border-radius:10px;padding:8px 0}.booking-day strong{font-size:17px}.booking-day small{font-size:8px}.booking-weekdays,.booking-days{gap:4px}.booking-legend{gap:10px;font-size:10px}.availability-card{margin:24px 0;border-radius:24px;padding:16px}.booking-selection .small{font-size:12px!important}}
 
 @media(max-width:700px){.booking-month-bar{gap:6px}.booking-month-bar h4{font-size:14px;white-space:nowrap}.booking-month-switch{width:29px;height:29px}.availability-card .booking-day{min-height:43px;gap:0}.booking-day small{display:none}.booking-day strong{font-size:16px}.booking-day.available::after{content:"";display:block;width:4px;height:4px;border-radius:50%;background:#a6c83d;margin-top:5px}.booking-day.selected::after{background:#d2f985}}

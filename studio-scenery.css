@@ -1,0 +1,39 @@
+/* Original subject illustrations frame the content without covering controls. */
+.art-surface{position:relative;isolation:isolate}
+.studio-scenery{position:absolute;inset:0;z-index:-1;overflow:clip;pointer-events:none;user-select:none;contain:paint}
+.studio-object{position:absolute;display:block;background:center/contain no-repeat;width:clamp(360px,43vw,700px);aspect-ratio:800/620;opacity:.2;transform:rotate(var(--object-angle,0deg));transform-origin:center}
+.object-laptop{background-image:url("assets/workspace-laptop.svg?v=1")}
+.object-map{background-image:url("assets/workspace-map.svg?v=1")}
+.object-sketch{background-image:url("assets/workspace-sketch.svg?v=1")}
+.object-links{background-image:url("assets/workspace-links.svg?v=1")}
+.object-primary{right:-130px;top:5px;--object-angle:6deg}
+.object-secondary{left:-150px;bottom:35px;--object-angle:-9deg}
+.page-main>.studio-scenery .object-primary{top:-5px;right:-110px;width:clamp(430px,47vw,720px)}
+.page-main>.studio-scenery .object-secondary{bottom:7%;width:clamp(370px,40vw,620px)}
+.page-main[data-art-theme="cabinet"]>.studio-scenery .object-primary{right:-110px;top:-45px;opacity:.24}
+.page-main[data-art-theme="cabinet"]>.studio-scenery .object-secondary{left:-150px;bottom:0;opacity:.19}
+.hero>.studio-scenery .object-primary{top:-80px;right:-210px;opacity:.13;width:650px}
+.hero>.studio-scenery .object-secondary{left:-180px;bottom:50px;opacity:.12;width:440px}
+.project-studio:before{background:radial-gradient(ellipse at 50% 48%,#f4eff7ee 10%,#f4eff790 45%,transparent 75%),radial-gradient(ellipse at 90% 20%,#c7a0fa66,transparent 60%)}
+.project-studio>.studio-scenery .object-primary{top:50px;right:-170px;opacity:.2}
+.project-studio>.studio-scenery .object-secondary{bottom:8%;left:-190px;opacity:.16}
+.design-application>.studio-scenery .object-primary{top:-30px;right:-130px}
+.design-application>.studio-scenery .object-secondary{bottom:0;left:-180px}
+.material-lab>.studio-scenery .object-primary{opacity:.18;right:-180px;top:-70px}
+.material-lab>.studio-scenery .object-secondary{opacity:.16;bottom:-50px}
+.process-lab>.studio-scenery .object-primary{right:-140px;top:0;opacity:.2}
+.world-preview>.studio-scenery .object-primary{right:-180px;top:-60px;opacity:.19}
+.world-preview>.studio-scenery .object-secondary{left:-180px;bottom:-20px;opacity:.17}
+@media(min-width:1000px) and (prefers-reduced-motion:no-preference){.studio-object{animation:studio-object-drift 24s ease-in-out infinite alternate}.object-secondary{animation-delay:-12s;animation-duration:30s}@keyframes studio-object-drift{from{transform:translateY(0) rotate(var(--object-angle,0deg))}to{transform:translateY(-12px) rotate(calc(var(--object-angle,0deg) + 1.5deg))}}}
+@media(max-width:700px){
+.studio-object{opacity:.14;width:380px}
+.object-primary,.page-main>.studio-scenery .object-primary{width:370px;right:-185px;top:5px}
+.object-secondary,.page-main>.studio-scenery .object-secondary{width:330px;left:-160px;bottom:12px;opacity:.12}
+.hero>.studio-scenery .object-primary{width:360px;right:-205px;top:110px;opacity:.09}
+.hero>.studio-scenery .object-secondary{width:300px;left:-200px;bottom:40px;opacity:.09}
+.project-studio>.studio-scenery .object-primary{right:-180px;width:380px;opacity:.13}
+.project-studio>.studio-scenery .object-secondary{left:-180px;opacity:.12}
+.page-main[data-art-theme="cabinet"]>.studio-scenery .object-primary{right:-190px;top:-10px;opacity:.16}
+.page-main[data-art-theme="cabinet"]>.studio-scenery .object-secondary{left:-180px;opacity:.13}
+.design-application>.studio-scenery .object-primary,.process-lab>.studio-scenery .object-primary,.world-preview>.studio-scenery .object-primary{right:-180px;opacity:.13}}
+@media(prefers-reduced-motion:reduce){.studio-object{animation:none}}
