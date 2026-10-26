@@ -1,0 +1,15 @@
+/* Page-specific compositions. Approved map and logo pages are intentionally outside this stylesheet. */
+.scene-websites{top:auto;bottom:-150px;right:-8vw;width:clamp(700px,60vw,1100px);opacity:.18;--scene-angle:-6deg}
+.useful-current{position:absolute;inset:0;background:url("assets/scenes/useful-current.svg") center/100% 100% no-repeat;opacity:.55;-webkit-mask-image:linear-gradient(transparent,#000 7%,#000 90%,transparent);mask-image:linear-gradient(transparent,#000 7%,#000 90%,transparent)}
+.personal-stroke{position:absolute;left:0;right:0;bottom:-20px;height:390px;background:url("assets/scenes/personal-stroke.svg") center bottom/cover no-repeat;opacity:.38}
+.ambient-wave{position:fixed;right:-7vw;bottom:8vh;width:min(1050px,85vw);height:clamp(210px,24vw,350px);z-index:0;pointer-events:none;-webkit-mask-image:linear-gradient(90deg,transparent,#000 20%);mask-image:linear-gradient(90deg,transparent,#000 20%);transform:rotate(7deg);transform-origin:right bottom}
+.ambient-wave canvas{display:block;width:100%;height:100%}
+.cabinet-body .cabinet-page,.cabinet-body .site-footer{position:relative;z-index:1}
+.contact-flow{height:clamp(160px,17vw,260px);margin-top:-35px;margin-bottom:-35px;opacity:.8}
+@media(max-width:700px){
+ .scene-websites{top:auto;bottom:-55px;right:-150px;left:auto;width:620px;opacity:.13}
+ .useful-current{background-size:auto 100%;background-position:65% center;opacity:.35}
+ .personal-stroke{height:270px;bottom:15px;background-position:65% bottom;opacity:.25}
+ .ambient-wave{right:-150px;bottom:0;width:700px;height:240px;opacity:.8}
+ .contact-flow{height:160px;margin-top:-15px;margin-bottom:-15px}
+}
