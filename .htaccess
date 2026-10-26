@@ -1,9 +1,16 @@
 AddType text/javascript .mjs
 
-# Keep the public homepage URL clean; internal DirectoryIndex requests must not redirect.
 <IfModule mod_rewrite.c>
 RewriteEngine On
-RewriteCond %{HTTP_HOST} ^(?:www\.)?elimora\.ru(?::[0-9]+)?$ [NC]
-RewriteCond %{THE_REQUEST} \s/+index\.html(?:[?\s]) [NC]
-RewriteRule ^index\.html$ / [R=301,L]
+# Redirect only explicit browser requests, never internal HTML resolution.
+RewriteCond %{THE_REQUEST} \s/+index(?:\.html)?(?:[?\s]) [NC]
+RewriteRule ^index(?:\.html)?$ / [R=301,L]
+RewriteCond %{THE_REQUEST} \s/+portfolio(?:\.html)?(?:[?\s]) [NC]
+RewriteRule ^portfolio(?:\.html)?$ /profiles [R=301,L]
+RewriteCond %{THE_REQUEST} \s/+[a-z0-9-]+\.html(?:[?\s]) [NC]
+RewriteRule ^(about|account|cafe|contacts|creative-formats|jasmine|kids|logos|maps-before-ads|maps|privacy|profile-content|services|terms|useful|visual|website-before-ads|websites)\.html$ /$1 [R=301,L]
+RewriteRule ^(about|account|cafe|contacts|creative-formats|jasmine|kids|logos|maps-before-ads|maps|privacy|profile-content|services|terms|useful|visual|website-before-ads|websites|profiles)/$ /$1 [R=301,L]
+# Keep assets and cabinet API paths untouched.
+RewriteRule ^profiles$ portfolio.html [END]
+RewriteRule ^(about|account|cafe|contacts|creative-formats|jasmine|kids|logos|maps-before-ads|maps|privacy|profile-content|services|terms|useful|visual|website-before-ads|websites)$ $1.html [END]
 </IfModule>

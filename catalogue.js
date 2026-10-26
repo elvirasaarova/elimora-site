@@ -16,5 +16,5 @@ document.getElementById('cart-account').onclick=()=>{
  const selectedDraft=catalogueDraft();if(!selectedDraft)return;const d=withPreferredStart(selectedDraft);
  try{sessionStorage.setItem('elimora-order-draft',JSON.stringify(d))}
  catch{document.getElementById('cart-account-status').textContent='Не удалось сохранить выбор. Разрешите хранение данных сайта в браузере или скопируйте список через «Обсудить до заявки».';return}
- location.href='account.html?new=1';
+ location.href='account?new=1';
 };

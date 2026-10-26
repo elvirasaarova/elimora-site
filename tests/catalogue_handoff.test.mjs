@@ -18,7 +18,7 @@ test('selected services carry their names, prices, descriptions and calculation 
  assert.equal(draft.source,'catalogue');assert.equal(draft.answers.services.length,2);
  assert(draft.brief.includes('Логотип — 3'));assert(draft.brief.includes('Создание сайта — нужен расчёт'));
  assert(draft.brief.includes('Состав, итоговую стоимость и сроки согласуем до оплаты'));
- assert.equal(t.run('location.href'),'account.html?new=1');
+ assert.equal(t.run('location.href'),'account?new=1');
 });
 test('availability appears after selection and remains available when editing a request',()=>{
  const t=setup();t.run('render()');

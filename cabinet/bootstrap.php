@@ -192,7 +192,7 @@ function notify_admin(int $id): void {
     $c=config(); $to=$c['admin_email']??'';
     if (!filter_var($to,FILTER_VALIDATE_EMAIL)) return;
     // Notification contains no brief or personal details; full information stays behind login.
-    @mail($to,'ELIMORA: new project #'.$id,"Новая заявка №$id.\nОткройте https://elimora.ru/account.html",'From: ELIMORA <no-reply@elimora.ru>');
+    @mail($to,'ELIMORA: new project #'.$id,"Новая заявка №$id.\nОткройте https://elimora.ru/account",'From: ELIMORA <no-reply@elimora.ru>');
 }
 
 function purpose(array $d,array $u): string {
@@ -206,7 +206,7 @@ function notify_project(array $o,string $body,bool $toAdmin=false): void {
     foreach ($ids as $uid) query('INSERT INTO em_notifications (user_id,order_id,body) VALUES (?,?,?)',[$uid,$o['id'],$body]);
     $mail=$toAdmin?config()['admin_email']:query('SELECT email FROM em_users WHERE id=?',[$o['user_id']])->fetchColumn();
     // Email contains no attachments, financial amounts or client material.
-    @mail($mail,'ELIMORA: project update',"В вашем кабинете есть обновление по проекту №".$o['id'].".\nhttps://elimora.ru/account.html",'From: ELIMORA <no-reply@elimora.ru>');
+    @mail($mail,'ELIMORA: project update',"В вашем кабинете есть обновление по проекту №".$o['id'].".\nhttps://elimora.ru/account",'From: ELIMORA <no-reply@elimora.ru>');
 }
 function visible_file(array $f,array $o,array $u): bool {
     return $u['role']==='admin' || ($f['purpose']==='final'?(bool)$o['released']:($f['purpose']!=='review' || !empty($f['review_id'])));
