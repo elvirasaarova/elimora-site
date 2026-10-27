@@ -2,12 +2,13 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import vm from 'node:vm';
 import fs from 'node:fs';
-const catalogue=fs.readFileSync(new URL('../catalogue.js',import.meta.url),'utf8').replace(/^import[^\n]+\n/,'');
+const catalogue=fs.readFileSync(new URL('../catalogue.js',import.meta.url),'utf8').replace(/^import[^\n]+\n/gm,'');
 const products=JSON.parse(fs.readFileSync(new URL('../catalogue.json',import.meta.url),'utf8'));
 function setup(){
  const nodes=new Map(),saved=new Map();let loads=0;
  const element=id=>{if(!nodes.has(id))nodes.set(id,{innerHTML:'',textContent:'',hidden:true,disabled:false,dataset:{},querySelector:()=>({}),showModal(){},close(){}});return nodes.get(id)};
  const context=vm.createContext({document:{getElementById:element,querySelectorAll:()=>[]},sessionStorage:{getItem:k=>saved.get(k),setItem:(k,v)=>saved.set(k,v)},location:{href:''},fetch:()=>new Promise(()=>{}),loadAvailability:()=>loads++,withPreferredStart:d=>d});
+ vm.runInContext(fs.readFileSync(new URL('../conversion-goals.mjs',import.meta.url),'utf8').replace('export ',''),context);
  vm.runInContext(catalogue,context);
  vm.runInContext('products='+JSON.stringify(products),context);
  return {context,nodes,saved,loads:()=>loads,run:s=>vm.runInContext(s,context)};
