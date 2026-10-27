@@ -1,3 +1,9 @@
+# Declare UTF-8 for browsers, link previews and search crawlers.
+AddDefaultCharset UTF-8
+<IfModule mod_mime.c>
+AddCharset UTF-8 .html .htm .css .js .mjs .json .xml .txt .svg
+</IfModule>
+
 AddType text/javascript .mjs
 
 <IfModule mod_rewrite.c>
