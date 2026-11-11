@@ -8,6 +8,12 @@ AddType text/javascript .mjs
 
 <IfModule mod_rewrite.c>
 RewriteEngine On
+
+# Require HTTPS, including when TLS terminates at the hosting proxy.
+RewriteCond %{HTTPS} !=on
+RewriteCond %{HTTP:X-Forwarded-Proto} !^https$ [NC]
+RewriteRule ^ https://elimora.ru%{REQUEST_URI} [R=301,L]
+
 # Redirect only explicit browser requests, never internal HTML resolution.
 RewriteCond %{THE_REQUEST} \s/+index(?:\.html)?(?:[?\s]) [NC]
 RewriteRule ^index(?:\.html)?$ / [R=301,L]
