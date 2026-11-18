@@ -10,7 +10,7 @@ function catalogueDraft(){
   source:'catalogue',
   title:selected.length===1?selected[0][1]:'Проект: '+selected.map(p=>p[1]).join(', ').slice(0,185),
   brief:['Выбранные услуги:',...selected.map(p=>p[1]+' — '+(p[2]===null?'нужен расчёт':money(p[2]))+'\n'+p[3]),'','Предварительно: '+money(selected.reduce((sum,p)=>sum+(p[2]||0),0))+(selected.some(p=>p[2]===null)?' + услуги по расчёту':''),'Состав, итоговую стоимость и сроки согласуем до оплаты. Тарифы Яндекса и других сервисов оплачиваются отдельно.'].join('\n'),
-  answers:{source:'catalogue',tasks:[...new Set(selected.map(p=>['basic','extended','max','support'].includes(p[0])?'maps':p[0]==='website'?'web':'visual'))],services:selected.map(p=>({id:p[0],name:p[1],price:p[2]}))}
+  answers:{source:'catalogue',tasks:[...new Set(selected.map(p=>(['basic','extended','max','support'].includes(p[0])||p[0].startsWith('map-'))?'maps':p[0]==='website'?'web':'visual'))],services:selected.map(p=>({id:p[0],name:p[1],price:p[2]}))}
  };
 }
 document.getElementById('cart-account').onclick=()=>{
@@ -23,3 +23,4 @@ document.getElementById('cart-account').onclick=()=>{
 
 cart=cart.filter(id=>products.some(p=>p[0]===id));
 render();
+

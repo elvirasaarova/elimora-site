@@ -26,7 +26,7 @@ test('selected services carry their names, prices, descriptions and calculation 
  const t=setup();t.run("cart=['logo','website'];render();document.getElementById('cart-account').onclick()");
  const draft=JSON.parse(t.saved.get('elimora-order-draft'));
  assert.equal(draft.source,'catalogue');assert.equal(draft.answers.services.length,2);
- assert(draft.brief.includes('Логотип — 3'));assert(draft.brief.includes('Создание сайта — нужен расчёт'));
+ assert(draft.brief.includes('Логотип — 3'));assert(draft.brief.includes('Готовый сайт на Tilda — 90'));assert.equal(draft.answers.services.find(s=>s.id==='website').price,90000);
  assert(draft.brief.includes('Состав, итоговую стоимость и сроки согласуем до оплаты'));
  assert.equal(t.run('location.href'),'account?new=1');
 });
@@ -72,3 +72,15 @@ test('calendar failure clears stale dates and keeps requests possible',async()=>
  assert.equal(t.run("withPreferredStart({brief:'Original'}).brief"),'Original');
 });
 
+
+
+test('the expanded price list has fixed prices and sends map tasks and three-month support correctly',()=>{
+ assert(products.every(p=>Number.isInteger(p[2])&&p[2]>0));
+ assert.equal(products.find(p=>p[0]==='support')[2],35900);
+ assert(products.find(p=>p[0]==='support')[3].includes('18 историй'));
+ const t=setup();t.run("cart=['map-stories','support'];render();document.getElementById('cart-account').onclick()");
+ const draft=JSON.parse(t.saved.get('elimora-order-draft'));
+ assert.deepEqual(draft.answers.tasks,['maps']);
+ assert(draft.brief.includes('41'));assert(draft.brief.includes('800'));
+ assert.deepEqual(draft.answers.services.map(p=>p.price),[5900,35900]);
+});

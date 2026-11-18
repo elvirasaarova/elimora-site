@@ -3,3 +3,6 @@
 @media(max-width:700px){.request-section{grid-template-columns:1fr;border-radius:26px;padding:24px 18px;scroll-margin-top:90px}.request-section h2{font-size:30px}.service-deliverables{grid-template-columns:1fr;gap:12px}.service-deliverables article{padding:20px}.request-form input,.request-form select,.request-form textarea{font-size:16px}.request-form .primary{width:100%;justify-content:center}.lead-card .cabinet-actions{display:grid}}
 
 main>.request-section{box-sizing:border-box;max-width:1240px;margin-left:auto;margin-right:auto;width:calc(100% - 40px)}.page-main>.request-section{width:100%}
+
+
+.service-intro-actions{display:flex;flex-wrap:wrap;align-items:center;gap:16px;margin:26px 0 38px}.service-intro-actions>a{display:inline-flex;align-items:center;justify-content:center;box-sizing:border-box;min-height:52px;margin:0;line-height:1.3;text-align:center;white-space:normal}.service-intro-actions>.secondary{padding:16px 24px;font-size:16px;border:1px solid #bda7d0;border-radius:999px;text-decoration:none}@media(max-width:600px){.service-intro-actions{display:grid;grid-template-columns:1fr;gap:12px}.service-intro-actions>a{width:100%;padding:16px 20px;font-size:16px}}
