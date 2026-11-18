@@ -4,15 +4,24 @@ import vm from 'node:vm';
 import fs from 'node:fs';
 const catalogue=fs.readFileSync(new URL('../catalogue.js',import.meta.url),'utf8').replace(/^import[^\n]+\n/gm,'');
 const products=JSON.parse(fs.readFileSync(new URL('../catalogue.json',import.meta.url),'utf8'));
-function setup(){
+function setup(embedded=false){
  const nodes=new Map(),saved=new Map();let loads=0;
  const element=id=>{if(!nodes.has(id))nodes.set(id,{innerHTML:'',textContent:'',hidden:true,disabled:false,dataset:{},querySelector:()=>({}),showModal(){},close(){}});return nodes.get(id)};
+ if(embedded)element('catalogue-data').textContent=JSON.stringify(products);
  const context=vm.createContext({document:{getElementById:element,querySelectorAll:()=>[]},sessionStorage:{getItem:k=>saved.get(k),setItem:(k,v)=>saved.set(k,v)},location:{href:''},fetch:()=>new Promise(()=>{}),loadAvailability:()=>loads++,withPreferredStart:d=>d});
  vm.runInContext(fs.readFileSync(new URL('../conversion-goals.mjs',import.meta.url),'utf8').replace('export ',''),context);
  vm.runInContext(catalogue,context);
  vm.runInContext('products='+JSON.stringify(products),context);
  return {context,nodes,saved,loads:()=>loads,run:s=>vm.runInContext(s,context)};
 }
+test('embedded prices enable service selection immediately without a catalogue network request',()=>{
+ const t=setup(true);
+ assert(t.nodes.get('catalogue').innerHTML.includes('9'));
+ assert(t.nodes.get('catalogue').innerHTML.includes('data-add="logo"'));
+ t.run("cart=['logo'];render();document.getElementById('cart-account').onclick()");
+ assert.equal(JSON.parse(t.saved.get('elimora-order-draft')).answers.services[0].price,3500);
+ assert.equal(t.run('location.href'),'account?new=1');
+});
 test('selected services carry their names, prices, descriptions and calculation items into the cabinet',()=>{
  const t=setup();t.run("cart=['logo','website'];render();document.getElementById('cart-account').onclick()");
  const draft=JSON.parse(t.saved.get('elimora-order-draft'));
@@ -62,3 +71,4 @@ test('calendar failure clears stale dates and keeps requests possible',async()=>
  assert(t.card.innerHTML.includes('оставить заявку'));assert(!t.saved.has('elimora-start-choice'));
  assert.equal(t.run("withPreferredStart({brief:'Original'}).brief"),'Original');
 });
+
