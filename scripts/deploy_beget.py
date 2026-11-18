@@ -39,7 +39,7 @@ def public_file(name):
     if len(p.parts) == 1:
         return p.suffix.lower() in PUBLIC_EXTENSIONS
     if p.parts[0] == 'cabinet':
-        return len(p.parts) == 2 and p.name in {'api.php', 'bootstrap.php', 'workflow.php', 'availability.php', 'schema.sql'}
+        return len(p.parts) == 2 and p.name in {'api.php', 'bootstrap.php', 'workflow.php', 'availability.php', 'leads.php', 'schema.sql'}
     return p.parts[0] == 'assets' and p.suffix.lower() in ASSET_EXTENSIONS
 
 
@@ -77,7 +77,7 @@ def deploy():
                 previous = {}
         changed = [name for name, digest in files.items() if previous.get(name) != digest]
         # Publish assets and dependencies before pages that reference them.
-        changed.sort(key=lambda n: (n.endswith('.html'), not n.startswith('assets/'), n))
+        changed.sort(key=lambda n: (2 if n.endswith('.html') else 1 if n == 'cabinet/api.php' else 0, not n.startswith('assets/'), n))
         made = set()
         for name in changed:
             parent = PurePosixPath(name).parent
@@ -122,3 +122,4 @@ if __name__ == '__main__':
                 message = message.replace(value, '[redacted]')
         print(f'Deployment failed ({type(exc).__name__}): {message}', file=sys.stderr)
         sys.exit(1)
+

@@ -21,7 +21,7 @@ ROOT=Path(__file__).resolve().parents[1]
 def check_allowlist():
     import runpy
     public=runpy.run_path(str(ROOT/'scripts/deploy_beget.py'))['public_file']
-    for n in ['index.html','cabinet/api.php','cabinet/bootstrap.php','cabinet/workflow.php','cabinet/availability.php','cabinet/schema.sql','cabinet/.htaccess','assets/portrait.webp']:
+    for n in ['index.html','cabinet/api.php','cabinet/bootstrap.php','cabinet/workflow.php','cabinet/availability.php','cabinet/leads.php','cabinet/schema.sql','cabinet/.htaccess','assets/portrait.webp']:
         assert public(n),n
     for n in ['.env','elimora-config.php','scripts/elimora-config.example.php','cabinet/config.php','cabinet/uploads/private.pdf','uploads/a.pdf','../a.json','/a.json','.git/config']:
         assert not public(n),n
@@ -74,6 +74,20 @@ def integration():
                 status,s=client.request('register',{'name':name,'email':mail,'password':'eight888','consent':True})
                 assert status==200 and s['user']['role']=='client'
             assert two.request('register',{'name':'Short','email':'short@example.test','password':'seven77','consent':True})[0]==400
+            # Anonymous enquiries require consent/CSRF, never create users or projects, and stay admin-only.
+            visitor=Client(url);visitor.request('status')
+            lead={'service':'creative','contact':'visitor@example.test','brief':'Need a banner <script>alert(1)</script>','url':'https://example.test','source':'visual','consent':True,'website_check':'','request_key':'b'*48}
+            assert visitor.request('lead-create',lead,csrf=False)[0]==403
+            for key,value in [('consent',False),('service','invalid'),('contact','bad!'),('url','javascript:alert(1)'),('website_check','spam')]:
+                invalid=dict(lead);invalid[key]=value
+                assert visitor.request('lead-create',invalid)[0]==400,(key,value)
+            code,result=visitor.request('lead-create',lead);assert code==200,result
+            lead_id=result['id'];assert visitor.request('lead-create',lead)[1]['id']==lead_id
+            assert visitor.request('leads')[0]==401
+            assert one.request('leads')[0]==403
+            assert one.request('lead-status',{'id':lead_id,'status':'closed'})[0]==403
+            assert visitor.request('orders')[0]==401
+            assert one.request('orders')[1]['orders']==[]
             order={'company':'Company One','title':'Test project','brief':'Answers and recommendation','answers':{'tasks':['maps']},'consent':True}
             assert one.request('create',order,csrf=False)[0]==403
             missing=dict(order);missing.pop('company')
@@ -132,6 +146,12 @@ def integration():
             assert one.request('order',extra=suffix)[1]['order']['company']=='Company One'
             admin.request('status')
             assert admin.request('login',{'email':'admin@example.test','password':'long-admin-password'})[0]==200
+            found=admin.request('leads')[1]['leads'];assert len(found)==1 and found[0]['contact']=='visitor@example.test'
+            assert admin.request('lead-status',{'id':lead_id,'status':'contacted'},csrf=False)[0]==403
+            assert admin.request('lead-status',{'id':lead_id,'status':'work'})[0]==400
+            assert admin.request('lead-status',{'id':lead_id,'status':'contacted'})[0]==200
+            assert admin.request('leads')[1]['leads'][0]['status']=='contacted'
+            assert visitor.request('leads')[0]==401
             assert len(admin.request('orders')[1]['orders'])==1
             assert admin.request('order',extra=suffix)[0]==200
             assert admin.request('status-change',{'status':'work'},suffix)[0]==200
@@ -261,3 +281,4 @@ def integration():
 check_allowlist()
 if os.environ.get('CI_DB_PASSWORD'):integration()
 else:print('Public-file allowlist passed; database integration runs in GitHub Actions.')
+

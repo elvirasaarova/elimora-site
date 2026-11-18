@@ -46,3 +46,13 @@ test('administrators and ordinary logins keep their dashboard',async()=>{
  const result=await render('client',`(async()=>{location.search='';draft=()=>({title:'Request'});newOrder=()=>{throw Error('No explicit request')};globalThis.visited=false;dashboard=async()=>{visited=true};await enterCabinet();return visited})()`);
  assert.equal(result,true);
 });
+
+
+test('enquiries appear in global admin navigation, stay out of client navigation and escape client input',()=>{
+ const admin=render('admin',"selected=null;view='leads';leads=[{id:3,status:'new',service:'creative',contact:'<script>x</script>',brief:'<img src=x>',url:'https://example.test',source:'visual',created_at:'2026-11-18 08:00:00'}];adminLeads();root.innerHTML");
+ assert(admin.includes('data-view="leads"'));assert(admin.includes('data-view="leads" aria-current="page"'));
+ assert(admin.includes('&lt;script&gt;'));assert(!admin.includes('<script>x</script>'));
+ assert(admin.includes('data-lead-status="3"'));
+ const client=render('client',"selected=null;shell('Content');root.innerHTML");
+ assert(!client.includes('data-view="leads"'));
+});

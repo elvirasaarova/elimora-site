@@ -3,6 +3,7 @@ declare(strict_types=1);
 define('ELIMORA_API',true);
 require __DIR__.'/bootstrap.php';
 require_once __DIR__.'/availability.php';
+require_once __DIR__.'/leads.php';
 try {
     $action=$_GET['action']??'status';
     if (!is_string($action)) fail('Некорректное действие.');
@@ -80,7 +81,9 @@ try {
         $today=(new DateTimeImmutable('now',new DateTimeZone('Asia/Saigon')))->format('Y-m-d');
         reply(work_forecast($projects,$today));
     }
+    if ($action==='lead-create') create_public_lead();
     $u=user();
+    if (in_array($action,['leads','lead-status'],true)) manage_public_leads($action,$u);
     if ($action==='logout') { post(); $_SESSION=[]; session_regenerate_id(true); reply(['ok'=>true]); }
     if ($action==='notifications') {
         reply(['notifications'=>query('SELECT id,order_id,body,seen,created_at FROM em_notifications WHERE user_id=? ORDER BY id DESC LIMIT 30',[$u['id']])->fetchAll()]);
@@ -272,3 +275,4 @@ try {
     error_log('ELIMORA cabinet: '.get_class($e).' code '.$e->getCode());
     reply(['error'=>'Не удалось выполнить действие. Попробуйте позже или напишите Эльвире в Telegram.'],503);
 }
+

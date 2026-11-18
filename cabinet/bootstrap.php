@@ -106,7 +106,7 @@ function storage(): string {
     return $dir;
 }
 function migrate(): void {
-    if (query("SELECT value FROM em_settings WHERE name='schema_version'")->fetchColumn()==='5') return;
+    if (query("SELECT value FROM em_settings WHERE name='schema_version'")->fetchColumn()==='6') return;
     $lock='elimora-schema-'.substr(hash('sha256',config()['db_name']),0,20);
     if ((int)query('SELECT GET_LOCK(?,10)',[$lock])->fetchColumn()!==1) throw new RuntimeException('schema lock');
     try {
@@ -141,7 +141,8 @@ function migrate(): void {
             if (!in_array('asset_type',$columns,true)) db()->exec("ALTER TABLE $table ADD asset_type VARCHAR(30) NOT NULL DEFAULT 'general'");
         }
         db()->exec("CREATE TABLE IF NOT EXISTS em_links (id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY, order_id BIGINT UNSIGNED NOT NULL, asset_type VARCHAR(30) NOT NULL, title VARCHAR(200) NOT NULL, url TEXT NOT NULL, review_id BIGINT UNSIGNED NULL, created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP, INDEX(order_id)) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4");
-        query("INSERT INTO em_settings (name,value) VALUES ('schema_version','5') ON DUPLICATE KEY UPDATE value='5'");
+        db()->exec("CREATE TABLE IF NOT EXISTS em_leads (id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY, request_hash CHAR(64) NOT NULL UNIQUE, service VARCHAR(20) NOT NULL, contact VARCHAR(200) NOT NULL, brief TEXT NOT NULL, url VARCHAR(1000) NOT NULL DEFAULT '', source VARCHAR(30) NOT NULL, consent TEXT NOT NULL, status VARCHAR(20) NOT NULL DEFAULT 'new', created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP, updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP, INDEX(status,created_at)) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4");
+        query("INSERT INTO em_settings (name,value) VALUES ('schema_version','6') ON DUPLICATE KEY UPDATE value='6'");
     } finally { query('SELECT RELEASE_LOCK(?)',[$lock]); }
 }
 function file_category(string $category): string {
@@ -224,3 +225,4 @@ function project_date(array $d,string $key): ?string {
     if (!$date || $date->format('Y-m-d')!==$v)fail('Проверьте дату.');
     return $v;
 }
+
