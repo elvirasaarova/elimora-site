@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
-import {sendLead} from '../public-lead.mjs';
+import {sendLead,requestContext} from '../public-lead.mjs';
 
 const payload={service:'creative',contact:'private@example.test',brief:'Private brief',consent:true,request_key:'a'.repeat(48)};
 test('a short enquiry succeeds only after a confirmed server save with CSRF',async()=>{
@@ -30,7 +30,14 @@ test('every service and the homepage expose a consent-based form without an acco
   assert.equal((page.match(/id="request"/g)||[]).length,1,name);
   assert(page.includes('name="consent" required'),name);
   assert(page.includes('data-public-lead'),name);
-  assert(page.includes('src="public-lead.mjs?v=1"'),name);
+  assert(page.includes('src="public-lead.mjs?v=2"'),name);
   assert(page.includes('href="https://t.me/Elimorastudio"'),name);
  }
+});
+
+test('guest requests retain selected services and the calendar date, without reserving it',()=>{
+ const values={'elimora-cart':'["creative"]','elimora-start-choice':'{"start":"2026-11-20"}'};
+ const context=requestContext('services',{getItem:key=>values[key]},JSON.stringify([['creative','Креатив',1500,'One banner']]));
+ assert(context.includes('Креатив'));assert(context.includes('2026-11-20'));assert(context.includes('не бронь'));
+ assert.equal(requestContext('services',{getItem:()=>{throw Error('blocked')}},'[]'),'');
 });
